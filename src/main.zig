@@ -1,16 +1,21 @@
 const std = @import("std");
 const io = std.io;
+const mem = std.mem;
 
 pub fn main() !void {
     const stdin = io.getStdIn().reader();
-    var buffer: [1024]u8 = undefined;
+    // const stdout = io.getStdOut().writer();
 
-    while (try nextLine(stdin, &buffer) != null) {
-        //
+    var char: [1]u8 = undefined;
+    // var input: []const u8 = undefined;
+
+    while (try stdin.read(&char) == 1 and !mem.eql(u8, &char, "q")) {
+        // input = (try nextLine(stdin, &buffer)).?;
+        // try stdout.print("{s}\n", .{input});
     }
 }
 
-fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
+fn nextLine(reader: std.fs.File.Reader, buffer: []u8) !?[] u8 {
     const line = (try reader.readUntilDelimiterOrEof(
             buffer,
             '\n',
@@ -22,11 +27,4 @@ fn nextLine(reader: anytype, buffer: []u8) !?[]const u8 {
     } else {
         return line;
     }
-}
-
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
 }
