@@ -1,8 +1,10 @@
 const std = @import("std");
 const io = std.io;
 const mem = std.mem;
+const posix = std.posix;
 
 pub fn main() !void {
+    try enableRawMode();
     const stdin = io.getStdIn().reader();
     // const stdout = io.getStdOut().writer();
 
@@ -13,6 +15,13 @@ pub fn main() !void {
         // input = (try nextLine(stdin, &buffer)).?;
         // try stdout.print("{s}\n", .{input});
     }
+}
+
+fn enableRawMode() !void {
+    var raw: posix.termios = try posix.tcgetattr(posix.STDIN_FILENO);
+    raw.lflag.ECHO = false;
+
+    try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
 }
 
 fn nextLine(reader: std.fs.File.Reader, buffer: []u8) !?[] u8 {
