@@ -3,7 +3,10 @@ const io = std.io;
 const mem = std.mem;
 const posix = std.posix;
 
+var original_termios: posix.termios = undefined;
+
 pub fn main() !void {
+    defer(disableRawMode());
     try enableRawMode();
     const stdin = io.getStdIn().reader();
     // const stdout = io.getStdOut().writer();
@@ -18,10 +21,19 @@ pub fn main() !void {
 }
 
 fn enableRawMode() !void {
-    var raw: posix.termios = try posix.tcgetattr(posix.STDIN_FILENO);
+    original_termios = try posix.tcgetattr(posix.STDIN_FILENO);
+    var raw = original_termios;
+
     raw.lflag.ECHO = false;
 
     try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
+}
+
+fn disableRawMode() void {
+    posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, original_termios) catch |err| switch (err) {
+        error.NotATerminal => posix.exit(1),
+        else => posix.exit(1),
+    };
 }
 
 fn nextLine(reader: std.fs.File.Reader, buffer: []u8) !?[] u8 {
