@@ -25,6 +25,7 @@ fn enableRawMode() !void {
     var raw = original_termios;
 
     raw.lflag.ECHO = false;
+    raw.lflag.ICANON = false;
 
     try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
 }
