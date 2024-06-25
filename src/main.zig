@@ -10,14 +10,19 @@ pub fn main() !void {
     try enableRawMode();
     const stdin = io.getStdIn().reader();
     const stdout = io.getStdOut().writer();
+    
+    while (true) {
+        var char: [1]u8 = .{ '\x00' };
+        _ = try stdin.read(&char); 
 
-    var char: [1]u8 = undefined;
-
-    while (try stdin.read(&char) == 1 and !mem.eql(u8, &char, "q")) {
         if (iscntrl(&char)) {
             try stdout.print("{d}\r\n", .{char});
         } else {
             try stdout.print("{d} ('{c}')\r\n", .{char, char});
+        }
+
+        if (mem.eql(u8, &char, "q")) {
+            break;
         }
     }
 }
@@ -37,8 +42,16 @@ fn enableRawMode() !void {
 
     raw.iflag.IXON = false;
     raw.iflag.ICRNL = false;
+    raw.iflag.BRKINT = false;
+    raw.iflag.INPCK = false;
+    raw.iflag.ISTRIP = false;
+    
+    raw.cflag.CSIZE = .CS8;
 
     raw.oflag.OPOST = false;
+
+    raw.cc[@intFromEnum(posix.V.MIN)] = 0;
+    raw.cc[@intFromEnum(posix.V.TIME)] = 1;
 
     try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
 }
