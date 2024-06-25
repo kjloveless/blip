@@ -33,6 +33,8 @@ fn enableRawMode() !void {
     raw.lflag.ECHO = false;
     raw.lflag.ICANON = false;
     raw.lflag.ISIG = false;
+    raw.lflag.IEXTEN = false;
+
     raw.iflag.IXON = false;
 
     try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
