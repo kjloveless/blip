@@ -15,9 +15,9 @@ pub fn main() !void {
 
     while (try stdin.read(&char) == 1 and !mem.eql(u8, &char, "q")) {
         if (iscntrl(&char)) {
-            try stdout.print("{d}\n", .{char});
+            try stdout.print("{d}\r\n", .{char});
         } else {
-            try stdout.print("{d} ('{c}')\n", .{char, char});
+            try stdout.print("{d} ('{c}')\r\n", .{char, char});
         }
     }
 }
@@ -37,6 +37,8 @@ fn enableRawMode() !void {
 
     raw.iflag.IXON = false;
     raw.iflag.ICRNL = false;
+
+    raw.oflag.OPOST = false;
 
     try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
 }
