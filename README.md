@@ -1,4 +1,4 @@
-# blip
+# blip [w.i.p.]
 
 ### kilo like text editor
 
