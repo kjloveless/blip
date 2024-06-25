@@ -9,15 +9,21 @@ pub fn main() !void {
     defer(disableRawMode());
     try enableRawMode();
     const stdin = io.getStdIn().reader();
-    // const stdout = io.getStdOut().writer();
+    const stdout = io.getStdOut().writer();
 
     var char: [1]u8 = undefined;
-    // var input: []const u8 = undefined;
 
     while (try stdin.read(&char) == 1 and !mem.eql(u8, &char, "q")) {
-        // input = (try nextLine(stdin, &buffer)).?;
-        // try stdout.print("{s}\n", .{input});
+        if (iscntrl(&char)) {
+            try stdout.print("{d}\n", .{char});
+        } else {
+            try stdout.print("{d} ('{c}')\n", .{char, char});
+        }
     }
+}
+
+fn iscntrl(c: *[1]u8) bool {
+    return ((c[0] >= 0 and c[0] < 32) or c[0] == 127);
 }
 
 fn enableRawMode() !void {
