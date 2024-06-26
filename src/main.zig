@@ -6,14 +6,27 @@ const posix = std.posix;
 var original_termios: posix.termios = undefined;
 
 pub fn main() !void {
+    enableRawMode();
     defer(disableRawMode());
-    try enableRawMode();
     const stdin = io.getStdIn().reader();
     const stdout = io.getStdOut().writer();
     
     while (true) {
         var char: [1]u8 = .{ '\x00' };
-        _ = try stdin.read(&char); 
+        _ = stdin.read(&char) catch |err| switch (err) {
+            error.AccessDenied => die("read", error.AccessDenied),
+            error.BrokenPipe => die("read", error.BrokenPipe),
+            error.ConnectionResetByPeer => die("read", error.ConnectionResetByPeer),
+            error.ConnectionTimedOut => die("read", error.ConnectionTimedOut),
+            error.InputOutput => die("read", error.InputOutput),
+            error.IsDir => die("read", error.IsDir),
+            error.NotOpenForReading => die("read", error.NotOpenForReading),
+            error.OperationAborted => die("read", error.OperationAborted),
+            error.SocketNotConnected => die("read", error.SocketNotConnected),
+            error.SystemResources => die("read", error.SystemResources),
+            error.Unexpected => die("read", error.Unexpected),
+            error.WouldBlock => continue,
+        }; 
 
         if (iscntrl(&char)) {
             try stdout.print("{d}\r\n", .{char});
@@ -27,12 +40,21 @@ pub fn main() !void {
     }
 }
 
+fn die(msg: []const u8, err: anyerror) noreturn {
+    std.debug.print("error {d} ({s}): {s}", .{ @intFromError(err), msg, @errorName(err) });
+    // should return the actual error code, hacking this for now
+    posix.exit(1);
+}
+
 fn iscntrl(c: *[1]u8) bool {
     return ((c[0] >= 0 and c[0] < 32) or c[0] == 127);
 }
 
-fn enableRawMode() !void {
-    original_termios = try posix.tcgetattr(posix.STDIN_FILENO);
+fn enableRawMode() void {
+    original_termios = posix.tcgetattr(posix.STDIN_FILENO) catch |err| switch (err) {
+        error.NotATerminal => die("tcgetattr", error.NotATerminal),
+        error.Unexpected => die("tcgetattr", error.Unexpected),
+    };
     var raw = original_termios;
 
     raw.lflag.ECHO = false;
@@ -53,13 +75,18 @@ fn enableRawMode() !void {
     raw.cc[@intFromEnum(posix.V.MIN)] = 0;
     raw.cc[@intFromEnum(posix.V.TIME)] = 1;
 
-    try posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw);
+    posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, raw) catch |err| switch (err) {
+        error.NotATerminal => die("tcsetattr", error.NotATerminal),
+        error.ProcessOrphaned => die("tcsetattr", error.ProcessOrphaned),
+        error.Unexpected => die("tcsetattr", error.Unexpected),
+    };
 }
 
 fn disableRawMode() void {
     posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, original_termios) catch |err| switch (err) {
-        error.NotATerminal => posix.exit(1),
-        else => posix.exit(1),
+        error.NotATerminal => die("tcsetattr", error.NotATerminal),
+        error.ProcessOrphaned => die("tcsetattr", error.ProcessOrphaned),
+        error.Unexpected => die("tcsetattr", error.Unexpected),
     };
 }
 
