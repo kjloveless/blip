@@ -1,6 +1,7 @@
 # blip [w.i.p.]
 
 ### kilo like text editor
+#### min. zig version = 0.13.0
 
 ##### currently works on posix systems, may get around to windows support eventually
 
