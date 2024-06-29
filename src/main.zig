@@ -134,8 +134,19 @@ fn editorReadKey(reader: std.fs.File.Reader) u8 {
 //-----------------------------------------------------------------------------
 // Output
 //-----------------------------------------------------------------------------
+fn editorDrawRows(writer: *const std.fs.File.Writer) !void {
+    var y: u8 = 0;
+    while (y < 24) : (y += 1) {
+        _ = try writer.write("~\r\n");
+    }
+}
+
 fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     _ = try writer.write("\x1b[2J");
+    _ = try writer.write("\x1b[H");
+
+    try editorDrawRows(&writer);
+
     _ = try writer.write("\x1b[H");
 }
 
