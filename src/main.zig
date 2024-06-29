@@ -25,35 +25,15 @@ pub fn main() !void {
     enableRawMode();
     defer(disableRawMode());
     const stdin = io.getStdIn().reader();
-    const stdout = io.getStdOut().writer();
-    
+    //const stdout = io.getStdOut().writer();
     while (true) {
-        var char: [1]u8 = .{ '\x00' };
-        _ = stdin.read(&char) catch |err| switch (err) {
-            error.AccessDenied => die("read", error.AccessDenied),
-            error.BrokenPipe => die("read", error.BrokenPipe),
-            error.ConnectionResetByPeer => die("read", error.ConnectionResetByPeer),
-            error.ConnectionTimedOut => die("read", error.ConnectionTimedOut),
-            error.InputOutput => die("read", error.InputOutput),
-            error.IsDir => die("read", error.IsDir),
-            error.NotOpenForReading => die("read", error.NotOpenForReading),
-            error.OperationAborted => die("read", error.OperationAborted),
-            error.SocketNotConnected => die("read", error.SocketNotConnected),
-            error.SystemResources => die("read", error.SystemResources),
-            error.Unexpected => die("read", error.Unexpected),
-            error.WouldBlock => continue,
-        }; 
-
-        if (iscntrl(&char)) {
-            try stdout.print("{d}\r\n", .{char});
-        } else {
-            try stdout.print("{d} ('{c}')\r\n", .{char, char});
-        }
-
-        if (char[0] == CTRL_KEY('q')) {
-            break;
-        }
+        try editorProcessKeypress(stdin);
     }
+    //    if (iscntrl(&char)) {
+    //        try stdout.print("{d}\r\n", .{char});
+    //    } else {
+    //        try stdout.print("{d} ('{c}')\r\n", .{char, char});
+    //    }
 }
 
 //------------------------------------------------------------------------------
@@ -109,16 +89,47 @@ fn disableRawMode() void {
     };
 }
 
-fn nextLine(reader: std.fs.File.Reader, buffer: []u8) !?[] u8 {
-    const line = (try reader.readUntilDelimiterOrEof(
-            buffer,
-            '\n',
-    )) orelse return null;
+fn editorReadKey(reader: std.fs.File.Reader) u8 {
+    var bytes_read: usize = undefined;
+    var char: [1]u8 = undefined;
+    while (bytes_read != 1) {
+        bytes_read = reader.read(&char) catch |err| switch (err) {
+            error.AccessDenied => die("read", error.AccessDenied),
+            error.BrokenPipe => die("read", error.BrokenPipe),
+            error.ConnectionResetByPeer => die("read", error.ConnectionResetByPeer),
+            error.ConnectionTimedOut => die("read", error.ConnectionTimedOut),
+            error.InputOutput => die("read", error.InputOutput),
+            error.IsDir => die("read", error.IsDir),
+            error.NotOpenForReading => die("read", error.NotOpenForReading),
+            error.OperationAborted => die("read", error.OperationAborted),
+            error.SocketNotConnected => die("read", error.SocketNotConnected),
+            error.SystemResources => die("read", error.SystemResources),
+            error.Unexpected => die("read", error.Unexpected),
+            error.WouldBlock => continue,
+        };
+    } 
+    return char[0];
+    //const line = (try reader.readUntilDelimiterOrEof(
+    //        buffer,
+    //        '\n',
+    //)) orelse return null;
 
     // trim windows-only carriage return char
-    if (@import("builtin").os.tag == .windows) {
-        return std.mem.trimRight(u8, line, "\r");
-    } else {
-        return line;
+    //if (@import("builtin").os.tag == .windows) {
+    //    return std.mem.trimRight(u8, line, "\r");
+    //} else {
+    //    return line;
+    //}
+}
+
+//-----------------------------------------------------------------------------
+// Input
+//-----------------------------------------------------------------------------
+fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
+    const char = editorReadKey(reader);
+
+    switch (char) {
+        CTRL_KEY('q') => posix.exit(0),
+        else => {},
     }
 }
