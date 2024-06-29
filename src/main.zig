@@ -25,8 +25,9 @@ pub fn main() !void {
     enableRawMode();
     defer(disableRawMode());
     const stdin = io.getStdIn().reader();
-    //const stdout = io.getStdOut().writer();
+    const stdout = io.getStdOut().writer();
     while (true) {
+        try editorRefreshScreen(stdout);
         try editorProcessKeypress(stdin);
     }
     //    if (iscntrl(&char)) {
@@ -40,6 +41,14 @@ pub fn main() !void {
 // Terminal
 //------------------------------------------------------------------------------
 fn die(msg: []const u8, err: anyerror) noreturn {
+    disableRawMode();
+    _ = posix.write(posix.STDOUT_FILENO, "\x1b[2J") catch {
+        posix.exit(1);
+    };
+    _ = posix.write(posix.STDOUT_FILENO, "\x1b[H") catch {
+        posix.exit(1);
+    };
+
     std.debug.print("error {d} ({s}): {s}", .{ @intFromError(err), msg, @errorName(err) });
     // should return the actual error code, hacking this for now
     posix.exit(1);
@@ -123,13 +132,26 @@ fn editorReadKey(reader: std.fs.File.Reader) u8 {
 }
 
 //-----------------------------------------------------------------------------
+// Output
+//-----------------------------------------------------------------------------
+fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
+    _ = try writer.write("\x1b[2J");
+    _ = try writer.write("\x1b[H");
+}
+
+//-----------------------------------------------------------------------------
 // Input
 //-----------------------------------------------------------------------------
 fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
     const char = editorReadKey(reader);
 
     switch (char) {
-        CTRL_KEY('q') => posix.exit(0),
+        CTRL_KEY('q') => {
+            disableRawMode();
+            _ = try posix.write(posix.STDOUT_FILENO, "\x1b[2J");
+            _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
+            posix.exit(0);
+        },
         else => {},
     }
 }
