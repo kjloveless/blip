@@ -212,7 +212,11 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 fn editorDrawRows(writer: *const std.fs.File.Writer) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
-        _ = try writer.write("~\r\n");
+        _ = try writer.write("~");
+
+        if (y < E.screenrows - 1) {
+            _ = try writer.write("\r\n");
+        }
     }
 }
 
