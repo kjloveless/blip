@@ -17,6 +17,8 @@ fn CTRL_KEY(key: u8) u8 {
 // Data 
 //------------------------------------------------------------------------------
 const editorConfig = struct {
+    screenrows: u16,
+    screencols: u16,
     original_termios: posix.termios,
 };
 
@@ -25,8 +27,15 @@ var E: editorConfig = undefined;
 //------------------------------------------------------------------------------
 // Init
 //------------------------------------------------------------------------------
+fn initEditor() void {
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
+        die("getWindowSize", error.WriteError); //pass correct error
+    }
+}
+
 pub fn main() !void {
     enableRawMode();
+    initEditor();
     defer(disableRawMode());
     const stdin = io.getStdIn().reader();
     const stdout = io.getStdOut().writer();
@@ -135,12 +144,24 @@ fn editorReadKey(reader: std.fs.File.Reader) u8 {
     //}
 }
 
+fn getWindowSize(rows: *u16, cols: *u16) i8 {
+    var ws: posix.winsize = undefined;
+    const ioctl_result = posix.system.ioctl(posix.STDOUT_FILENO, posix.T.IOCGWINSZ, @intFromPtr(&ws));
+    if ((ioctl_result == -1) or (ws.ws_col == 0)) {
+        return -1;
+    } else {
+        cols.* = ws.ws_col;
+        rows.* = ws.ws_row;
+        return 0;
+    }
+}
+
 //-----------------------------------------------------------------------------
 // Output
 //-----------------------------------------------------------------------------
 fn editorDrawRows(writer: *const std.fs.File.Writer) !void {
     var y: u8 = 0;
-    while (y < 24) : (y += 1) {
+    while (y < E.screenrows) : (y += 1) {
         _ = try writer.write("~\r\n");
     }
 }
