@@ -27,18 +27,18 @@ var E: editorConfig = undefined;
 //------------------------------------------------------------------------------
 // Init
 //------------------------------------------------------------------------------
-fn initEditor() void {
-    if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
+fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
+    if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
     }
 }
 
 pub fn main() !void {
     enableRawMode();
-    initEditor();
     defer(disableRawMode());
     const stdin = io.getStdIn().reader();
     const stdout = io.getStdOut().writer();
+    try initEditor(stdout, stdin);
     while (true) {
         try editorRefreshScreen(stdout);
         try editorProcessKeypress(stdin);
@@ -144,11 +144,61 @@ fn editorReadKey(reader: std.fs.File.Reader) u8 {
     //}
 }
 
-fn getWindowSize(rows: *u16, cols: *u16) i8 {
+fn getCursorPosition(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *u16, cols: *u16) !i8 {
+    var buffer: [32]u8 = undefined;
+    var i: usize = 0;
+
+    if (try writer.write("\x1b[6n") != 4) {
+        return -1;
+    }
+
+    var char: [1]u8 = undefined;
+    while (i < buffer.len - 1) : (i += 1) {
+        if (try reader.read(&char) != 1) {
+            break;
+        }
+        buffer[i] = char[0];
+        if (buffer[i] == 'R') {
+            break;
+        }
+    }
+    buffer[i] = '\x00';
+
+    //try writer.print("\r\n&buffer[1]: '{s}'\r\n", .{ buffer[1..] });
+
+    //_ = try writer.write("\r\n");
+    //var char: [1]u8 = undefined;
+    //while (try reader.read(&char) == 1) {
+    //    if (iscntrl(&char)) {
+    //        try writer.print("{d}\r\n", .{ char[0] });
+    //    } else {
+    //        try writer.print("{d} ('{c}')\r\n", .{ char[0], char[0] });
+    //    }
+    //}
+    //_ = editorReadKey(reader);
+
+    if (buffer[0] != '\x1b' or buffer[1] != '[') {
+        return -1;
+    }
+
+    var row_col_iter = std.mem.split(u8, buffer[2..i], ";");
+    const row_str = row_col_iter.next().?;
+    const col_str = row_col_iter.next().?;
+
+    rows.* = try std.fmt.parseInt(u16, row_str, 10);
+    cols.* = try std.fmt.parseInt(u16, col_str, 10);
+
+    return 0;
+} 
+
+fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *u16, cols: *u16) !i8 {
     var ws: posix.winsize = undefined;
     const ioctl_result = posix.system.ioctl(posix.STDOUT_FILENO, posix.T.IOCGWINSZ, @intFromPtr(&ws));
     if ((ioctl_result == -1) or (ws.ws_col == 0)) {
-        return -1;
+        if (try writer.write("\x1b[999C\x1b[999B") != 12) {
+            return -1;
+        }
+        return getCursorPosition(writer, reader, rows, cols);
     } else {
         cols.* = ws.ws_col;
         rows.* = ws.ws_row;
