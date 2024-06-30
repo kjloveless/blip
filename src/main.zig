@@ -16,7 +16,11 @@ fn CTRL_KEY(key: u8) u8 {
 //------------------------------------------------------------------------------
 // Data 
 //------------------------------------------------------------------------------
-var original_termios: posix.termios = undefined;
+const editorConfig = struct {
+    original_termios: posix.termios,
+};
+
+var E: editorConfig = undefined;
 
 //------------------------------------------------------------------------------
 // Init
@@ -59,11 +63,11 @@ fn iscntrl(c: *[1]u8) bool {
 }
 
 fn enableRawMode() void {
-    original_termios = posix.tcgetattr(posix.STDIN_FILENO) catch |err| switch (err) {
+    E.original_termios = posix.tcgetattr(posix.STDIN_FILENO) catch |err| switch (err) {
         error.NotATerminal => die("tcgetattr", error.NotATerminal),
         error.Unexpected => die("tcgetattr", error.Unexpected),
     };
-    var raw = original_termios;
+    var raw = E.original_termios;
 
     raw.lflag.ECHO = false;
     raw.lflag.ICANON = false;
@@ -91,7 +95,7 @@ fn enableRawMode() void {
 }
 
 fn disableRawMode() void {
-    posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, original_termios) catch |err| switch (err) {
+    posix.tcsetattr(posix.STDIN_FILENO, .FLUSH, E.original_termios) catch |err| switch (err) {
         error.NotATerminal => die("tcsetattr", error.NotATerminal),
         error.ProcessOrphaned => die("tcsetattr", error.ProcessOrphaned),
         error.Unexpected => die("tcsetattr", error.Unexpected),
