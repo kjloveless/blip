@@ -248,12 +248,14 @@ fn editorDrawRows(append_buffer: *abuf) !void {
 fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     var append_buffer: abuf = ABUF_INIT;
 
+    try abAppend(&append_buffer, "\x1b[?25l");
     try abAppend(&append_buffer, "\x1b[2J");
     try abAppend(&append_buffer, "\x1b[H");
 
     try editorDrawRows(&append_buffer);
 
     try abAppend(&append_buffer, "\x1b[H");
+    try abAppend(&append_buffer, "\x1b[?25h");
 
     _ = try writer.write(append_buffer.b.items);
     abFree(&append_buffer);
