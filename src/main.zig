@@ -24,6 +24,31 @@ const editorConfig = struct {
 
 var E: editorConfig = undefined;
 
+//-----------------------------------------------------------------------------
+// Append Buffer
+//-----------------------------------------------------------------------------
+const abuf = struct {
+    b: std.ArrayList(u8),
+};
+
+const ABUF_INIT = abuf{ .b = std.ArrayList(u8).init(std.heap.page_allocator) };
+
+fn abAppend(ab: *abuf, s: []const u8) !void {
+    //const new_len = ab.b.len + s.len; 
+    //const new = try ab.allocator.alloc(u8, new_len);
+    //if (ab.b) |old_slice| {
+    //    @memcpy(new, old_slice);
+    //}
+    //@memcpy(new[ab.length..], s);
+    //ab.b = if (new.len == 0) null else new.ptr;
+    //ab.length += new_len;
+    try ab.b.appendSlice(s);
+}
+
+fn abFree(append_buffer: *abuf) void {
+    append_buffer.b.deinit();
+}
+
 //------------------------------------------------------------------------------
 // Init
 //------------------------------------------------------------------------------
@@ -209,24 +234,29 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 //-----------------------------------------------------------------------------
 // Output
 //-----------------------------------------------------------------------------
-fn editorDrawRows(writer: *const std.fs.File.Writer) !void {
+fn editorDrawRows(append_buffer: *abuf) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
-        _ = try writer.write("~");
+        try abAppend(append_buffer, "~");
 
         if (y < E.screenrows - 1) {
-            _ = try writer.write("\r\n");
+            try abAppend(append_buffer, "\r\n");
         }
     }
 }
 
 fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
-    _ = try writer.write("\x1b[2J");
-    _ = try writer.write("\x1b[H");
+    var append_buffer: abuf = ABUF_INIT;
 
-    try editorDrawRows(&writer);
+    try abAppend(&append_buffer, "\x1b[2J");
+    try abAppend(&append_buffer, "\x1b[H");
 
-    _ = try writer.write("\x1b[H");
+    try editorDrawRows(&append_buffer);
+
+    try abAppend(&append_buffer, "\x1b[H");
+
+    _ = try writer.write(append_buffer.b.items);
+    abFree(&append_buffer);
 }
 
 //-----------------------------------------------------------------------------
