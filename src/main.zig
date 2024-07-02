@@ -28,31 +28,25 @@ var E: editorConfig = undefined;
 // Append Buffer
 //-----------------------------------------------------------------------------
 const abuf = struct {
-    b: ?[*]u8,
-    length: usize,
-    allocator: std.mem.Allocator,
+    b: std.ArrayList(u8),
 };
 
-const ABUF_INIT = abuf{ .b = null, .length = 0, .allocator = std.heap.page_allocator };
+const ABUF_INIT = abuf{ .b = std.ArrayList(u8).init(std.heap.page_allocator) };
 
 fn abAppend(ab: *abuf, s: []const u8) !void {
-    const new_len: u32 = @intCast(ab.length + s.len); // should probably handle
-                                                      // this more gracefully
-                                                      // than casting.. oh
-                                                      // well!
-    const new = try ab.allocator.alloc(u8, new_len);
-    if (ab.b) |old_slice| {
-        @memcpy(new, old_slice);
-    }
-    @memcpy(new[ab.length..], s);
-    ab.b = if (new.len == 0) null else new.ptr;
-    ab.length += new_len;
+    //const new_len = ab.b.len + s.len; 
+    //const new = try ab.allocator.alloc(u8, new_len);
+    //if (ab.b) |old_slice| {
+    //    @memcpy(new, old_slice);
+    //}
+    //@memcpy(new[ab.length..], s);
+    //ab.b = if (new.len == 0) null else new.ptr;
+    //ab.length += new_len;
+    try ab.b.appendSlice(s);
 }
 
 fn abFree(append_buffer: *abuf) void {
-    if (append_buffer.b) |buf| {
-        append_buffer.allocator.free(buf[0..append_buffer.length]);
-    }
+    append_buffer.b.deinit();
 }
 
 //------------------------------------------------------------------------------
@@ -261,7 +255,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 
     try abAppend(&append_buffer, "\x1b[H");
 
-    _ = try writer.write(append_buffer.b.?[0..append_buffer.length]);
+    _ = try writer.write(append_buffer.b.items);
     abFree(&append_buffer);
 }
 
