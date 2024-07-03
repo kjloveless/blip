@@ -10,9 +10,17 @@ const posix = std.posix;
 // Defines
 //------------------------------------------------------------------------------
 const BLIP_VERSION: []const u8 = "0.0.1";
+
 fn CTRL_KEY(key: u8) u8 {
     return key & 0x1f;
 }
+
+const editorKey = enum(u8) {
+    ARROW_LEFT = 150,
+    ARROW_RIGHT,
+    ARROW_UP,
+    ARROW_DOWN,
+};
 
 //------------------------------------------------------------------------------
 // Data 
@@ -129,7 +137,7 @@ fn disableRawMode() void {
     };
 }
 
-fn editorReadKey(reader: std.fs.File.Reader) u8 {
+fn editorReadKey(reader: std.fs.File.Reader) !u8 {
     var bytes_read: usize = undefined;
     var char: [1]u8 = undefined;
     while (bytes_read != 1) {
@@ -157,10 +165,10 @@ fn editorReadKey(reader: std.fs.File.Reader) u8 {
 
         if (seq[0] == '[') {
             switch (seq[1]) {
-                'A' => return 'w',
-                'B' => return 's',
-                'C' => return 'd',
-                'D' => return 'a',
+                'A' => return @intFromEnum(editorKey.ARROW_UP),
+                'B' => return @intFromEnum(editorKey.ARROW_DOWN),
+                'C' => return @intFromEnum(editorKey.ARROW_RIGHT),
+                'D' => return @intFromEnum(editorKey.ARROW_LEFT),
                 else => {},
             }
         }
@@ -291,16 +299,16 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 //-----------------------------------------------------------------------------
 fn editorMoveCursor(key: u8) void {
     switch (key) {
-        'a' => E.cx -= 1,
-        'd' => E.cx += 1,
-        'w' => E.cy -= 1,
-        's' => E.cy += 1,
+        @intFromEnum(editorKey.ARROW_LEFT) => E.cx -= 1,
+        @intFromEnum(editorKey.ARROW_RIGHT) => E.cx += 1,
+        @intFromEnum(editorKey.ARROW_UP) => E.cy -= 1,
+        @intFromEnum(editorKey.ARROW_DOWN) => E.cy += 1,
         else => {},
     }
 }
 
 fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
-    const char = editorReadKey(reader);
+    const char = try editorReadKey(reader);
 
     switch (char) {
         CTRL_KEY('q') => {
@@ -309,7 +317,11 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
             posix.exit(0);
         },
-        'w', 's', 'a', 'd' => editorMoveCursor(char),
+        @intFromEnum(editorKey.ARROW_UP) => editorMoveCursor(char),
+        @intFromEnum(editorKey.ARROW_DOWN) => editorMoveCursor(char),
+        @intFromEnum(editorKey.ARROW_LEFT) => editorMoveCursor(char),
+        @intFromEnum(editorKey.ARROW_RIGHT) => editorMoveCursor(char),
+        //'w', 's', 'a', 'd' => editorMoveCursor(char),
         else => {},
     }
 }
