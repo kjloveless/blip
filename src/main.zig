@@ -243,11 +243,20 @@ fn editorDrawRows(append_buffer: *abuf) !void {
             var start: usize = 0;
             _ = &start;
             const welcome_slice = welcome_alloc[start..];
+
             const welcome = try std.fmt.bufPrint(
                 welcome_slice, 
                 "Blip editor -- version {s}", 
                 .{ BLIP_VERSION }
             );
+            var padding: u16 = @intCast((E.screencols - welcome.len) / 2);
+            if (padding > 0) {
+                try abAppend(append_buffer, "~");
+                padding -= 1;
+            }
+            while (padding > 0) : (padding -= 1) {
+                try abAppend(append_buffer, " ");
+            }
             try abAppend(append_buffer, welcome);
         } else {
             try abAppend(append_buffer, "~");
