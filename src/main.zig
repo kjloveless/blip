@@ -239,13 +239,9 @@ fn editorDrawRows(append_buffer: *abuf) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
         if (y == E.screenrows / 3) {
-            var welcome_alloc: [80]u8 = undefined;
-            var start: usize = 0;
-            _ = &start;
-            const welcome_slice = welcome_alloc[start..];
-
+            var welcome_buffer: [80]u8 = undefined;
             const welcome = try std.fmt.bufPrint(
-                welcome_slice, 
+                &welcome_buffer, 
                 "Blip editor -- version {s}", 
                 .{ BLIP_VERSION }
             );
