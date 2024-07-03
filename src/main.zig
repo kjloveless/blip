@@ -18,6 +18,8 @@ fn CTRL_KEY(key: u8) u8 {
 // Data 
 //------------------------------------------------------------------------------
 const editorConfig = struct {
+    cx: u16,
+    cy: u16,
     screenrows: u16,
     screencols: u16,
     original_termios: posix.termios,
@@ -54,6 +56,9 @@ fn abFree(append_buffer: *abuf) void {
 // Init
 //------------------------------------------------------------------------------
 fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
+    E.cx = 0;
+    E.cy = 0;
+
     if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
     }
@@ -242,7 +247,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
             var welcome_buffer: [80]u8 = undefined;
             const welcome = try std.fmt.bufPrint(
                 &welcome_buffer, 
-                "Blip editor -- version {s}", 
+                "blip editor -- version {s}", 
                 .{ BLIP_VERSION }
             );
             var padding: u16 = @intCast((E.screencols - welcome.len) / 2);
