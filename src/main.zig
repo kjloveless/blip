@@ -37,14 +37,6 @@ const abuf = struct {
 const ABUF_INIT = abuf{ .b = std.ArrayList(u8).init(std.heap.page_allocator) };
 
 fn abAppend(ab: *abuf, s: []const u8) !void {
-    //const new_len = ab.b.len + s.len; 
-    //const new = try ab.allocator.alloc(u8, new_len);
-    //if (ab.b) |old_slice| {
-    //    @memcpy(new, old_slice);
-    //}
-    //@memcpy(new[ab.length..], s);
-    //ab.b = if (new.len == 0) null else new.ptr;
-    //ab.length += new_len;
     try ab.b.appendSlice(s);
 }
 
@@ -74,11 +66,6 @@ pub fn main() !void {
         try editorRefreshScreen(stdout);
         try editorProcessKeypress(stdin);
     }
-    //    if (iscntrl(&char)) {
-    //        try stdout.print("{d}\r\n", .{char});
-    //    } else {
-    //        try stdout.print("{d} ('{c}')\r\n", .{char, char});
-    //    }
 }
 
 //------------------------------------------------------------------------------
@@ -195,19 +182,6 @@ fn getCursorPosition(writer: std.fs.File.Writer, reader: std.fs.File.Reader, row
     }
     buffer[i] = '\x00';
 
-    //try writer.print("\r\n&buffer[1]: '{s}'\r\n", .{ buffer[1..] });
-
-    //_ = try writer.write("\r\n");
-    //var char: [1]u8 = undefined;
-    //while (try reader.read(&char) == 1) {
-    //    if (iscntrl(&char)) {
-    //        try writer.print("{d}\r\n", .{ char[0] });
-    //    } else {
-    //        try writer.print("{d} ('{c}')\r\n", .{ char[0], char[0] });
-    //    }
-    //}
-    //_ = editorReadKey(reader);
-
     if (buffer[0] != '\x1b' or buffer[1] != '[') {
         return -1;
     }
@@ -274,12 +248,18 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     var append_buffer: abuf = ABUF_INIT;
 
     try abAppend(&append_buffer, "\x1b[?25l");
-    //try abAppend(&append_buffer, "\x1b[2J");
     try abAppend(&append_buffer, "\x1b[H");
 
     try editorDrawRows(&append_buffer);
 
-    try abAppend(&append_buffer, "\x1b[H");
+    var buffer: [32]u8 = undefined;
+    const cursor_position = try std.fmt.bufPrint(
+        &buffer,
+        "\x1b[{d};{d}H",
+        .{ E.cy + 1, E.cx + 1}    
+    );
+    try abAppend(&append_buffer, cursor_position);
+
     try abAppend(&append_buffer, "\x1b[?25h");
 
     _ = try writer.write(append_buffer.b.items);
