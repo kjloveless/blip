@@ -148,7 +148,27 @@ fn editorReadKey(reader: std.fs.File.Reader) u8 {
             error.WouldBlock => continue,
         };
     } 
-    return char[0];
+
+    if (char[0] == '\x1b') {
+        var seq: [3]u8 = undefined;
+
+        if (try reader.read(seq[0..1]) != 1) return '\x1b';
+        if (try reader.read(seq[1..2]) != 1) return '\x1b';
+
+        if (seq[0] == '[') {
+            switch (seq[1]) {
+                'A' => return 'w',
+                'B' => return 's',
+                'C' => return 'd',
+                'D' => return 'a',
+                else => {},
+            }
+        }
+
+        return '\x1b';
+    } else {
+        return char[0];
+    }
     //const line = (try reader.readUntilDelimiterOrEof(
     //        buffer,
     //        '\n',
