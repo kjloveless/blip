@@ -9,6 +9,7 @@ const posix = std.posix;
 //------------------------------------------------------------------------------
 // Defines
 //------------------------------------------------------------------------------
+const BLIP_VERSION: []const u8 = "0.0.1";
 fn CTRL_KEY(key: u8) u8 {
     return key & 0x1f;
 }
@@ -237,7 +238,20 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 fn editorDrawRows(append_buffer: *abuf) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
-        try abAppend(append_buffer, "~");
+        if (y == E.screenrows / 3) {
+            var welcome_alloc: [80]u8 = undefined;
+            var start: usize = 0;
+            _ = &start;
+            const welcome_slice = welcome_alloc[start..];
+            const welcome = try std.fmt.bufPrint(
+                welcome_slice, 
+                "Blip editor -- version {s}", 
+                .{ BLIP_VERSION }
+            );
+            try abAppend(append_buffer, welcome);
+        } else {
+            try abAppend(append_buffer, "~");
+        }
 
         try abAppend(append_buffer, "\x1b[K");
         if (y < E.screenrows - 1) {
