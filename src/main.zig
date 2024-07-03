@@ -20,6 +20,8 @@ const editorKey = enum(u8) {
     ARROW_RIGHT,
     ARROW_UP,
     ARROW_DOWN,
+    PAGE_UP,
+    PAGE_DOWN,
 };
 
 //------------------------------------------------------------------------------
@@ -164,12 +166,23 @@ fn editorReadKey(reader: std.fs.File.Reader) !u8 {
         if (try reader.read(seq[1..2]) != 1) return '\x1b';
 
         if (seq[0] == '[') {
-            switch (seq[1]) {
-                'A' => return @intFromEnum(editorKey.ARROW_UP),
-                'B' => return @intFromEnum(editorKey.ARROW_DOWN),
-                'C' => return @intFromEnum(editorKey.ARROW_RIGHT),
-                'D' => return @intFromEnum(editorKey.ARROW_LEFT),
-                else => {},
+            if (seq[1] >= '0' and seq[1] <= '9') {
+                if (try reader.read(seq[2..3]) != 1) return '\x1b';
+                if (seq[2] == '~') {
+                    switch (seq[1]) {
+                        '5' => return @intFromEnum(editorKey.PAGE_UP),
+                        '6' => return @intFromEnum(editorKey.PAGE_DOWN),
+                        else => {},
+                    }
+                }
+            } else {
+                switch (seq[1]) {
+                    'A' => return @intFromEnum(editorKey.ARROW_UP),
+                    'B' => return @intFromEnum(editorKey.ARROW_DOWN),
+                    'C' => return @intFromEnum(editorKey.ARROW_RIGHT),
+                    'D' => return @intFromEnum(editorKey.ARROW_LEFT),
+                    else => {},
+                }
             }
         }
 
@@ -332,6 +345,16 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[2J");
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
             posix.exit(0);
+        },
+        @intFromEnum(editorKey.PAGE_UP), @intFromEnum(editorKey.PAGE_DOWN) => {
+            var times: u16 = E.screenrows;
+            while (times > 0) : (times -= 1) {
+                if (char == @intFromEnum(editorKey.PAGE_UP)) {
+                    editorMoveCursor(@intFromEnum(editorKey.ARROW_UP));
+                } else {
+                    editorMoveCursor(@intFromEnum(editorKey.ARROW_DOWN));
+                }
+            }
         },
         @intFromEnum(editorKey.ARROW_UP) => editorMoveCursor(char),
         @intFromEnum(editorKey.ARROW_DOWN) => editorMoveCursor(char),
