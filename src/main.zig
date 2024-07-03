@@ -269,6 +269,16 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 //-----------------------------------------------------------------------------
 // Input
 //-----------------------------------------------------------------------------
+fn editorMoveCursor(key: u8) void {
+    switch (key) {
+        'a' => E.cx -= 1,
+        'd' => E.cx += 1,
+        'w' => E.cy -= 1,
+        's' => E.cy += 1,
+        else => {},
+    }
+}
+
 fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
     const char = editorReadKey(reader);
 
@@ -279,6 +289,7 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
             posix.exit(0);
         },
+        'w', 's', 'a', 'd' => editorMoveCursor(char),
         else => {},
     }
 }
