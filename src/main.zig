@@ -20,6 +20,7 @@ const editorKey = enum(u8) {
     ARROW_RIGHT,
     ARROW_UP,
     ARROW_DOWN,
+    DEL_KEY,
     HOME_KEY,
     END_KEY,
     PAGE_UP,
@@ -173,6 +174,7 @@ fn editorReadKey(reader: std.fs.File.Reader) !u8 {
                 if (seq[2] == '~') {
                     switch (seq[1]) {
                         '1' => return @intFromEnum(editorKey.HOME_KEY),
+                        '3' => return @intFromEnum(editorKey.DEL_KEY),
                         '4' => return @intFromEnum(editorKey.END_KEY),
                         '5' => return @intFromEnum(editorKey.PAGE_UP),
                         '6' => return @intFromEnum(editorKey.PAGE_DOWN),
