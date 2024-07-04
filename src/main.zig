@@ -30,15 +30,30 @@ const editorKey = enum(u8) {
 //------------------------------------------------------------------------------
 // Data 
 //------------------------------------------------------------------------------
+const erow = struct {
+    chars: std.ArrayList(u8),
+};
+
 const editorConfig = struct {
     cx: u16,
     cy: u16,
     screenrows: u16,
     screencols: u16,
+    numrows: u16,
+    row: erow,
     original_termios: posix.termios,
 };
 
 var E: editorConfig = undefined;
+
+//-----------------------------------------------------------------------------
+// File I/O
+//-----------------------------------------------------------------------------
+fn editorOpen() !void {
+    const line: []const u8 = "Hello, world!";
+    try E.row.chars.appendSlice(line);
+    E.numrows = 1;
+}
 
 //-----------------------------------------------------------------------------
 // Append Buffer
@@ -63,6 +78,8 @@ fn abFree(append_buffer: *abuf) void {
 fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.cx = 0;
     E.cy = 0;
+    E.numrows = 0;
+    E.row.chars = std.ArrayList(u8).init(std.heap.page_allocator);
 
     if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
@@ -75,6 +92,7 @@ pub fn main() !void {
     const stdin = io.getStdIn().reader();
     const stdout = io.getStdOut().writer();
     try initEditor(stdout, stdin);
+    try editorOpen();
     while (true) {
         try editorRefreshScreen(stdout);
         try editorProcessKeypress(stdin);
@@ -274,24 +292,28 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 fn editorDrawRows(append_buffer: *abuf) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
-        if (y == E.screenrows / 3) {
-            var welcome_buffer: [80]u8 = undefined;
-            const welcome = try std.fmt.bufPrint(
-                &welcome_buffer, 
-                "blip editor -- version {s}", 
-                .{ BLIP_VERSION }
-            );
-            var padding: u16 = @intCast((E.screencols - welcome.len) / 2);
-            if (padding > 0) {
+        if (y >= E.numrows) {
+            if (y == E.screenrows / 3) {
+                var welcome_buffer: [80]u8 = undefined;
+                const welcome = try std.fmt.bufPrint(
+                    &welcome_buffer, 
+                    "blip editor -- version {s}", 
+                    .{ BLIP_VERSION }
+                );
+                var padding: u16 = @intCast((E.screencols - welcome.len) / 2);
+                if (padding > 0) {
+                    try abAppend(append_buffer, "~");
+                    padding -= 1;
+                }
+                while (padding > 0) : (padding -= 1) {
+                    try abAppend(append_buffer, " ");
+                }
+                try abAppend(append_buffer, welcome);
+            } else {
                 try abAppend(append_buffer, "~");
-                padding -= 1;
             }
-            while (padding > 0) : (padding -= 1) {
-                try abAppend(append_buffer, " ");
-            }
-            try abAppend(append_buffer, welcome);
         } else {
-            try abAppend(append_buffer, "~");
+            try abAppend(append_buffer, E.row.chars.items);
         }
 
         try abAppend(append_buffer, "\x1b[K");
