@@ -49,8 +49,23 @@ var E: editorConfig = undefined;
 //-----------------------------------------------------------------------------
 // File I/O
 //-----------------------------------------------------------------------------
-fn editorOpen() !void {
-    const line: []const u8 = "Hello, world!";
+fn editorOpen(filename: []u8) !void {
+    const file: std.fs.File = try std.fs.cwd().openFile(
+        filename,
+        .{ },
+    );
+    defer file.close();
+    var file_reader = std.io.bufferedReader(file.reader());
+    var input_stream = file_reader.reader();
+
+    const line = try input_stream.readUntilDelimiterAlloc(
+        std.heap.page_allocator, 
+        '\n',
+        std.math.maxInt(u16),
+    );
+    if (line.len > -1) {
+        // strip newline chars
+    }
     try E.row.chars.appendSlice(line);
     E.numrows = 1;
 }
@@ -92,7 +107,11 @@ pub fn main() !void {
     const stdin = io.getStdIn().reader();
     const stdout = io.getStdOut().writer();
     try initEditor(stdout, stdin);
-    try editorOpen();
+    const args = try std.process.argsAlloc(std.heap.page_allocator);
+    defer std.process.argsFree(std.heap.page_allocator, args);
+    if (args.len >= 2) {
+        try editorOpen(args[1]);
+    }
     while (true) {
         try editorRefreshScreen(stdout);
         try editorProcessKeypress(stdin);
@@ -293,7 +312,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
         if (y >= E.numrows) {
-            if (y == E.screenrows / 3) {
+            if (E.numrows == 0 and y == E.screenrows / 3) {
                 var welcome_buffer: [80]u8 = undefined;
                 const welcome = try std.fmt.bufPrint(
                     &welcome_buffer, 
