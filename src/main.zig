@@ -496,7 +496,11 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             posix.exit(0);
         },
         @intFromEnum(editorKey.HOME_KEY) => E.cx = 0,
-        @intFromEnum(editorKey.END_KEY) => E.cx = E.screencols - 1,
+        @intFromEnum(editorKey.END_KEY) => {
+            if (E.cy < E.numrows) {
+                E.cx = @intCast(E.row.items[E.cy].chars.items.len);
+            }
+        },
         @intFromEnum(editorKey.PAGE_UP), @intFromEnum(editorKey.PAGE_DOWN) => {
             if (char == @intFromEnum(editorKey.PAGE_UP)) {
                 E.cy = E.rowoff;
