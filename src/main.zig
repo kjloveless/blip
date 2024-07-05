@@ -39,6 +39,7 @@ const erow = struct {
 const editorConfig = struct {
     cx: u16,
     cy: u16,
+    rx: u16,
     rowoff: u16,
     coloff: u16,
     screenrows: u16,
@@ -101,6 +102,7 @@ fn abFree(append_buffer: *abuf) void {
 fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.cx = 0;
     E.cy = 0;
+    E.rx = 0;
     E.rowoff = 0;
     E.coloff = 0;
     E.numrows = 0;
@@ -318,6 +320,18 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 //-----------------------------------------------------------------------------
 // Row Operations
 //-----------------------------------------------------------------------------
+fn editorRowCxToRx(row: *erow, cx: u16) u16 {
+    var rx: u16 = 0;
+    var i: u16 = 0;
+    while (i < cx) : (i += 1) {
+        if (row.*.chars.items[i] == '\t') {
+            rx += (BLIP_TAB_STOP - 1) - (rx % BLIP_TAB_STOP);
+        }
+        rx += 1;
+    }
+    return rx;
+}
+
 fn editorUpdateRow(row: *erow) !void {
     var i: usize = 0;
     while (i < row.*.chars.items.len) : (i += 1) {
@@ -346,6 +360,11 @@ fn editorAppendRow(s: []u8) !void {
 // Output
 //-----------------------------------------------------------------------------
 fn editorScroll() void {
+    E.rx = 0;
+    if (E.cy < E.numrows) {
+        E.rx = editorRowCxToRx(&E.row.items[E.cy], E.cx);
+    }
+
     if (E.cy < E.rowoff) {
         E.rowoff = E.cy;
     }
@@ -353,11 +372,11 @@ fn editorScroll() void {
         E.rowoff = E.cy - E.screenrows + 1;
     }
 
-    if (E.cx < E.coloff) {
-        E.coloff = E.cx;
+    if (E.rx < E.coloff) {
+        E.coloff = E.rx;
     }
-    if (E.cx >= E.coloff + E.screencols) {
-        E.coloff = E.cx - E.screencols + 1;
+    if (E.rx >= E.coloff + E.screencols) {
+        E.coloff = E.rx - E.screencols + 1;
     }
 }
 
@@ -414,7 +433,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     const cursor_position = try std.fmt.bufPrint(
         &buffer,
         "\x1b[{d};{d}H",
-        .{ (E.cy - E.rowoff) + 1, (E.cx - E.coloff) + 1}    
+        .{ (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1}    
     );
     try abAppend(&append_buffer, cursor_position);
 
