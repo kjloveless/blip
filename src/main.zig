@@ -17,6 +17,7 @@ fn CTRL_KEY(key: u8) u8 {
 }
 
 const editorKey = enum(u8) {
+    BACKSPACE = 127,
     ARROW_LEFT = 150,
     ARROW_RIGHT,
     ARROW_UP,
@@ -566,18 +567,26 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
     const char = try editorReadKey(reader);
 
     switch (char) {
+        '\r' => {},
+
         CTRL_KEY('q') => {
             disableRawMode();
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[2J");
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
             posix.exit(0);
         },
+
         @intFromEnum(editorKey.HOME_KEY) => E.cx = 0,
+
         @intFromEnum(editorKey.END_KEY) => {
             if (E.cy < E.numrows) {
                 E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
         },
+
+        @intFromEnum(editorKey.BACKSPACE), @intFromEnum(editorKey.DEL_KEY),
+        CTRL_KEY('h') => {},
+
         @intFromEnum(editorKey.PAGE_UP), @intFromEnum(editorKey.PAGE_DOWN) => {
             if (char == @intFromEnum(editorKey.PAGE_UP)) {
                 E.cy = E.rowoff;
@@ -596,10 +605,14 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
                 }
             }
         },
+
         @intFromEnum(editorKey.ARROW_UP) => editorMoveCursor(char),
         @intFromEnum(editorKey.ARROW_DOWN) => editorMoveCursor(char),
         @intFromEnum(editorKey.ARROW_LEFT) => editorMoveCursor(char),
         @intFromEnum(editorKey.ARROW_RIGHT) => editorMoveCursor(char),
+
+        CTRL_KEY('l'), '\x1b' => {},
+
         //'w', 's', 'a', 'd' => editorMoveCursor(char),
         else => try editorInsertChar(char),
     }
