@@ -498,6 +498,14 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
         @intFromEnum(editorKey.HOME_KEY) => E.cx = 0,
         @intFromEnum(editorKey.END_KEY) => E.cx = E.screencols - 1,
         @intFromEnum(editorKey.PAGE_UP), @intFromEnum(editorKey.PAGE_DOWN) => {
+            if (char == @intFromEnum(editorKey.PAGE_UP)) {
+                E.cy = E.rowoff;
+            } else if (char == @intFromEnum(editorKey.PAGE_DOWN)) {
+                E.cy = E.rowoff + E.screenrows - 1;
+                if (E.cy > E.numrows) {
+                    E.cy = E.numrows;
+                }
+            }
             var times: u16 = E.screenrows;
             while (times > 0) : (times -= 1) {
                 if (char == @intFromEnum(editorKey.PAGE_UP)) {
