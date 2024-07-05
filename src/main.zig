@@ -46,6 +46,7 @@ const editorConfig = struct {
     screencols: u16,
     numrows: u16,
     row: std.ArrayList(erow),
+    filename: ?[]u8,
     original_termios: posix.termios,
 };
 
@@ -55,6 +56,7 @@ var E: editorConfig = undefined;
 // File I/O
 //-----------------------------------------------------------------------------
 fn editorOpen(filename: []u8) !void {
+    E.filename = filename;
     const file: std.fs.File = try std.fs.cwd().openFile(
         filename,
         .{ },
@@ -107,10 +109,12 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.coloff = 0;
     E.numrows = 0;
     E.row = std.ArrayList(erow).init(std.heap.page_allocator); 
+    E.filename = null;
 
     if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
     }
+    E.screenrows -= 1;
 }
 
 pub fn main() !void {
@@ -414,10 +418,37 @@ fn editorDrawRows(append_buffer: *abuf) !void {
         }
 
         try abAppend(append_buffer, "\x1b[K");
-        if (y < E.screenrows - 1) {
-            try abAppend(append_buffer, "\r\n");
+        try abAppend(append_buffer, "\r\n");
+    }
+}
+
+fn editorDrawStatusBar(append_buffer: *abuf) !void {
+    try abAppend(append_buffer, "\x1b[7m");
+    var status_buffer: [80]u8 = undefined;
+    var row_status_buffer: [80]u8 = undefined;
+
+    const status = try std.fmt.bufPrint(
+        &status_buffer,
+        "{s} - {d} lines",
+        .{ if (E.filename != null) E.filename.? else "[No Name]", E.numrows }
+    );
+    const row_status = try std.fmt.bufPrint(
+        &row_status_buffer,
+        "{d}/{d}",
+        .{ E.cy + 1, E.numrows }
+    );
+
+    try abAppend(append_buffer, status);
+    var len: usize = status.len;
+    while (len < E.screencols) : (len += 1) {
+        if (E.screencols - len == row_status.len) {
+            try abAppend(append_buffer, row_status);
+            break;
+        } else {
+            try abAppend(append_buffer, " ");
         }
     }
+    try abAppend(append_buffer, "\x1b[m");
 }
 
 fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
@@ -428,6 +459,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     try abAppend(&append_buffer, "\x1b[H");
 
     try editorDrawRows(&append_buffer);
+    try editorDrawStatusBar(&append_buffer);
 
     var buffer: [32]u8 = undefined;
     const cursor_position = try std.fmt.bufPrint(
