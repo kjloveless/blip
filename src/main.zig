@@ -37,6 +37,7 @@ const erow = struct {
 const editorConfig = struct {
     cx: u16,
     cy: u16,
+    rowoff: u16,
     screenrows: u16,
     screencols: u16,
     numrows: u16,
@@ -97,6 +98,7 @@ fn abFree(append_buffer: *abuf) void {
 fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.cx = 0;
     E.cy = 0;
+    E.rowoff = 0;
     E.numrows = 0;
     E.row = std.ArrayList(erow).init(std.heap.page_allocator); 
 
@@ -324,10 +326,20 @@ fn editorAppendRow(s: []u8) !void {
 //-----------------------------------------------------------------------------
 // Output
 //-----------------------------------------------------------------------------
+fn editorScroll() void {
+    if (E.cy < E.rowoff) {
+        E.rowoff = E.cy;
+    }
+    if (E.cy >= E.rowoff + E.screenrows) {
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+}
+
 fn editorDrawRows(append_buffer: *abuf) !void {
     var y: u8 = 0;
     while (y < E.screenrows) : (y += 1) {
-        if (y >= E.numrows) {
+        const filerow = y + E.rowoff;
+        if (filerow >= E.numrows) {
             if (E.numrows == 0 and y == E.screenrows / 3) {
                 var welcome_buffer: [80]u8 = undefined;
                 const welcome = try std.fmt.bufPrint(
@@ -348,7 +360,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 try abAppend(append_buffer, "~");
             }
         } else {
-            try abAppend(append_buffer, E.row.items[y].chars.items);
+            try abAppend(append_buffer, E.row.items[filerow].chars.items);
         }
 
         try abAppend(append_buffer, "\x1b[K");
@@ -359,6 +371,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
 }
 
 fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
+    editorScroll();
     var append_buffer: abuf = ABUF_INIT;
 
     try abAppend(&append_buffer, "\x1b[?25l");
@@ -370,7 +383,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     const cursor_position = try std.fmt.bufPrint(
         &buffer,
         "\x1b[{d};{d}H",
-        .{ E.cy + 1, E.cx + 1}    
+        .{ (E.cy - E.rowoff) + 1, E.cx + 1}    
     );
     try abAppend(&append_buffer, cursor_position);
 
@@ -401,7 +414,7 @@ fn editorMoveCursor(key: u8) void {
             }
         },
         @intFromEnum(editorKey.ARROW_DOWN) => {
-            if (E.cy != E.screenrows - 1) {
+            if (E.cy < E.numrows) {
                 E.cy += 1;
             }
         },
