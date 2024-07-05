@@ -38,6 +38,7 @@ const editorConfig = struct {
     cx: u16,
     cy: u16,
     rowoff: u16,
+    coloff: u16,
     screenrows: u16,
     screencols: u16,
     numrows: u16,
@@ -99,6 +100,7 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.cx = 0;
     E.cy = 0;
     E.rowoff = 0;
+    E.coloff = 0;
     E.numrows = 0;
     E.row = std.ArrayList(erow).init(std.heap.page_allocator); 
 
@@ -333,6 +335,13 @@ fn editorScroll() void {
     if (E.cy >= E.rowoff + E.screenrows) {
         E.rowoff = E.cy - E.screenrows + 1;
     }
+
+    if (E.cx < E.coloff) {
+        E.coloff = E.cx;
+    }
+    if (E.cx >= E.coloff + E.screencols) {
+        E.coloff = E.cx - E.screencols + 1;
+    }
 }
 
 fn editorDrawRows(append_buffer: *abuf) !void {
@@ -360,7 +369,12 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 try abAppend(append_buffer, "~");
             }
         } else {
-            try abAppend(append_buffer, E.row.items[filerow].chars.items);
+            if (E.row.items[filerow].chars.items.len > E.coloff) {
+                try abAppend(append_buffer,
+                    E.row.items[filerow].chars.items[E.coloff..]);
+            } else {
+                try abAppend(append_buffer, "");
+            }
         }
 
         try abAppend(append_buffer, "\x1b[K");
@@ -383,7 +397,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     const cursor_position = try std.fmt.bufPrint(
         &buffer,
         "\x1b[{d};{d}H",
-        .{ (E.cy - E.rowoff) + 1, E.cx + 1}    
+        .{ (E.cy - E.rowoff) + 1, (E.cx - E.coloff) + 1}    
     );
     try abAppend(&append_buffer, cursor_position);
 
@@ -403,11 +417,7 @@ fn editorMoveCursor(key: u8) void {
                 E.cx -= 1;
             }
         },
-        @intFromEnum(editorKey.ARROW_RIGHT) => {
-            if (E.cx != E.screencols - 1) {
-                E.cx += 1;
-            }
-        },
+        @intFromEnum(editorKey.ARROW_RIGHT) => E.cx += 1,
         @intFromEnum(editorKey.ARROW_UP) => {
             if (E.cy != 0) {
                 E.cy -= 1;
