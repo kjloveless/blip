@@ -40,7 +40,7 @@ const editorConfig = struct {
     screenrows: u16,
     screencols: u16,
     numrows: u16,
-    row: erow,
+    row: std.ArrayList(erow),
     original_termios: posix.termios,
 };
 
@@ -58,16 +58,20 @@ fn editorOpen(filename: []u8) !void {
     var file_reader = std.io.bufferedReader(file.reader());
     var input_stream = file_reader.reader();
 
-    const line = try input_stream.readUntilDelimiterAlloc(
-        std.heap.page_allocator, 
-        '\n',
-        std.math.maxInt(u16),
-    );
-    if (line.len > -1) {
-        // strip newline chars
+    while(true) {
+        const line = input_stream.readUntilDelimiterAlloc(
+            std.heap.page_allocator, 
+            '\n',
+            std.math.maxInt(u16),
+        ) catch |err| {
+            if (err == error.EndOfStream) break;
+            return err;
+        };
+        if (line.len > -1) {
+            // strip newline chars
+        }
+        try editorAppendRow(line);
     }
-    try E.row.chars.appendSlice(line);
-    E.numrows = 1;
 }
 
 //-----------------------------------------------------------------------------
@@ -94,7 +98,7 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.cx = 0;
     E.cy = 0;
     E.numrows = 0;
-    E.row.chars = std.ArrayList(u8).init(std.heap.page_allocator);
+    E.row = std.ArrayList(erow).init(std.heap.page_allocator); 
 
     if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
@@ -306,6 +310,18 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 }
 
 //-----------------------------------------------------------------------------
+// Row Operations
+//-----------------------------------------------------------------------------
+fn editorAppendRow(s: []u8) !void {
+    _ = try E.row.addOne();
+    const at: u16 = E.numrows;
+    const item = &E.row.items[at];
+    item.*.chars = std.ArrayList(u8).init(std.heap.page_allocator);
+    try item.*.chars.appendSlice(s);
+    E.numrows += 1;
+}
+
+//-----------------------------------------------------------------------------
 // Output
 //-----------------------------------------------------------------------------
 fn editorDrawRows(append_buffer: *abuf) !void {
@@ -332,7 +348,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 try abAppend(append_buffer, "~");
             }
         } else {
-            try abAppend(append_buffer, E.row.chars.items);
+            try abAppend(append_buffer, E.row.items[y].chars.items);
         }
 
         try abAppend(append_buffer, "\x1b[K");
