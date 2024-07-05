@@ -47,6 +47,8 @@ const editorConfig = struct {
     numrows: u16,
     row: std.ArrayList(erow),
     filename: ?[]u8,
+    statusmsg: std.ArrayList(u8),
+    statusmsg_time: i64,
     original_termios: posix.termios,
 };
 
@@ -110,11 +112,15 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.numrows = 0;
     E.row = std.ArrayList(erow).init(std.heap.page_allocator); 
     E.filename = null;
+    E.statusmsg = std.ArrayList(u8).init(std.heap.page_allocator);
+    _ = try E.statusmsg.addOne();
+    E.statusmsg.items[0] = '\x00';
+    E.statusmsg_time = 0;
 
     if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
     }
-    E.screenrows -= 1;
+    E.screenrows -= 2;
 }
 
 pub fn main() !void {
@@ -128,6 +134,9 @@ pub fn main() !void {
     if (args.len >= 2) {
         try editorOpen(args[1]);
     }
+
+    try editorSetStatusMessage("Help: Ctrl-Q = quit");
+
     while (true) {
         try editorRefreshScreen(stdout);
         try editorProcessKeypress(stdin);
@@ -449,6 +458,15 @@ fn editorDrawStatusBar(append_buffer: *abuf) !void {
         }
     }
     try abAppend(append_buffer, "\x1b[m");
+    try abAppend(append_buffer, "\r\n");
+}
+
+fn editorDrawMessageBar(append_buffer: *abuf) !void {
+    try abAppend(append_buffer, "\x1b[K");
+    if (E.statusmsg.items.len > 0 
+        and std.time.timestamp() - E.statusmsg_time < 5) {
+        try abAppend(append_buffer, E.statusmsg.items);
+    }
 }
 
 fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
@@ -460,6 +478,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 
     try editorDrawRows(&append_buffer);
     try editorDrawStatusBar(&append_buffer);
+    try editorDrawMessageBar(&append_buffer);
 
     var buffer: [32]u8 = undefined;
     const cursor_position = try std.fmt.bufPrint(
@@ -473,6 +492,12 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 
     _ = try writer.write(append_buffer.b.items);
     abFree(&append_buffer);
+}
+
+fn editorSetStatusMessage(msg: []const u8) !void {
+    E.statusmsg.clearAndFree();
+    try E.statusmsg.appendSlice(msg);
+    E.statusmsg_time = std.time.timestamp();
 }
 
 //-----------------------------------------------------------------------------
