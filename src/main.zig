@@ -32,6 +32,7 @@ const editorKey = enum(u8) {
 //------------------------------------------------------------------------------
 const erow = struct {
     chars: std.ArrayList(u8),
+    render: std.ArrayList(u8),
 };
 
 const editorConfig = struct {
@@ -316,12 +317,23 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 //-----------------------------------------------------------------------------
 // Row Operations
 //-----------------------------------------------------------------------------
+fn editorUpdateRow(row: *erow) !void {
+    var i: usize = 0;
+    while (i < row.*.chars.items.len) : (i += 1) {
+        try row.*.render.append(row.*.chars.items[i]);
+    }
+}
+
 fn editorAppendRow(s: []u8) !void {
     _ = try E.row.addOne();
     const at: u16 = E.numrows;
     const item = &E.row.items[at];
     item.*.chars = std.ArrayList(u8).init(std.heap.page_allocator);
     try item.*.chars.appendSlice(s);
+
+    item.*.render = std.ArrayList(u8).init(std.heap.page_allocator);
+    try editorUpdateRow(item);
+
     E.numrows += 1;
 }
 
@@ -369,9 +381,9 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 try abAppend(append_buffer, "~");
             }
         } else {
-            if (E.row.items[filerow].chars.items.len > E.coloff) {
+            if (E.row.items[filerow].render.items.len > E.coloff) {
                 try abAppend(append_buffer,
-                    E.row.items[filerow].chars.items[E.coloff..]);
+                    E.row.items[filerow].render.items[E.coloff..]);
             } else {
                 try abAppend(append_buffer, "");
             }
