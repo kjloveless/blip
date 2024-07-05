@@ -347,6 +347,7 @@ fn editorRowCxToRx(row: *erow, cx: u16) u16 {
 
 fn editorUpdateRow(row: *erow) !void {
     var i: usize = 0;
+    row.*.render.clearAndFree();
     while (i < row.*.chars.items.len) : (i += 1) {
         if (row.*.chars.items[i] == '\t') {
             try row.*.render.appendSlice(" " ** BLIP_TAB_STOP);
@@ -367,6 +368,25 @@ fn editorAppendRow(s: []u8) !void {
     try editorUpdateRow(item);
 
     E.numrows += 1;
+}
+
+fn editorRowInsertChar(row: *erow, at: u16, c: u8) !void {
+    var here: usize = at;
+    if (at < 0 or at > row.*.chars.items.len) {
+        here = row.*.chars.items.len;
+    }
+    try row.*.chars.insert(here, c);
+    try editorUpdateRow(row);
+}
+
+//-----------------------------------------------------------------------------
+// Editor Operations
+//-----------------------------------------------------------------------------
+fn editorInsertChar(c: u8) !void {
+    if (E.cy == E.numrows) {
+        try editorAppendRow("");
+    }
+    try editorRowInsertChar(&E.row.items[E.cy], E.cx, c);
 }
 
 //-----------------------------------------------------------------------------
@@ -581,6 +601,6 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
         @intFromEnum(editorKey.ARROW_LEFT) => editorMoveCursor(char),
         @intFromEnum(editorKey.ARROW_RIGHT) => editorMoveCursor(char),
         //'w', 's', 'a', 'd' => editorMoveCursor(char),
-        else => {},
+        else => try editorInsertChar(char),
     }
 }
