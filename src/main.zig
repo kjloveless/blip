@@ -461,7 +461,7 @@ fn editorMoveCursor(key: u8) void {
     }
 
     row = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
-    if (E.cx > row.?.chars.items.len) {
+    if (row != null and E.cx > row.?.chars.items.len) {
         E.cx = @intCast(row.?.chars.items.len);
     }
 }
