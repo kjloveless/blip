@@ -424,12 +424,16 @@ fn editorMoveCursor(key: u8) void {
         @intFromEnum(editorKey.ARROW_RIGHT) => {
             if (row != null and E.cx < row.?.chars.items.len) {
                 E.cx += 1;
+            } else if (row != null and E.cx == row.?.chars.items.len) {
+                E.cy += 1;
+                E.cx = 0;
             }
+
         },
         @intFromEnum(editorKey.ARROW_UP) => {
             if (E.cy != 0) {
                 E.cy -= 1;
-            }
+            } 
         },
         @intFromEnum(editorKey.ARROW_DOWN) => {
             if (E.cy < E.numrows) {
