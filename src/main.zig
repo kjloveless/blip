@@ -411,7 +411,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 // Input
 //-----------------------------------------------------------------------------
 fn editorMoveCursor(key: u8) void {
-    const row: ?*erow = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
+    var row: ?*erow = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
     switch (key) {
         @intFromEnum(editorKey.ARROW_LEFT) => {
             if (E.cx != 0) {
@@ -434,6 +434,11 @@ fn editorMoveCursor(key: u8) void {
             }
         },
         else => {},
+    }
+
+    row = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
+    if (E.cx > row.?.chars.items.len) {
+        E.cx = @intCast(row.?.chars.items.len);
     }
 }
 
