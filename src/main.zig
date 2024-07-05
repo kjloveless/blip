@@ -10,6 +10,7 @@ const posix = std.posix;
 // Defines
 //------------------------------------------------------------------------------
 const BLIP_VERSION: []const u8 = "0.0.1";
+const BLIP_TAB_STOP: u8 = 8;
 
 fn CTRL_KEY(key: u8) u8 {
     return key & 0x1f;
@@ -320,7 +321,11 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 fn editorUpdateRow(row: *erow) !void {
     var i: usize = 0;
     while (i < row.*.chars.items.len) : (i += 1) {
-        try row.*.render.append(row.*.chars.items[i]);
+        if (row.*.chars.items[i] == '\t') {
+            try row.*.render.appendSlice(" " ** BLIP_TAB_STOP);
+        } else {
+            try row.*.render.append(row.*.chars.items[i]);
+        }
     }
 }
 
