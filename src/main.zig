@@ -416,6 +416,9 @@ fn editorMoveCursor(key: u8) void {
         @intFromEnum(editorKey.ARROW_LEFT) => {
             if (E.cx != 0) {
                 E.cx -= 1;
+            } else if (E.cy > 0) {
+                E.cy -= 1;
+                E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
         },
         @intFromEnum(editorKey.ARROW_RIGHT) => {
