@@ -388,6 +388,7 @@ fn editorInsertChar(c: u8) !void {
         try editorAppendRow("");
     }
     try editorRowInsertChar(&E.row.items[E.cy], E.cx, c);
+    E.cx += 1;
 }
 
 //-----------------------------------------------------------------------------
