@@ -11,6 +11,7 @@ const posix = std.posix;
 //------------------------------------------------------------------------------
 const BLIP_VERSION: []const u8 = "0.0.1";
 const BLIP_TAB_STOP: u8 = 8;
+const BLIP_QUIT_TIMES: u2 = 3;
 
 fn CTRL_KEY(key: u8) u8 {
     return key & 0x1f;
@@ -610,11 +611,25 @@ fn editorMoveCursor(key: u8) void {
 
 fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
     const char = try editorReadKey(reader);
+    const Q = struct {
+        var quit_times: u2 = BLIP_QUIT_TIMES;
+    };
 
     switch (char) {
         '\r' => {},
 
         CTRL_KEY('q') => {
+            if (E.dirty and Q.quit_times > 0) {
+                var msg = std.ArrayList(u8).init(std.heap.page_allocator);
+                try std.fmt.format(
+                    msg.writer(),
+                    "WARNING!!! File has unsaved changes. Press Ctrl-Q {d} more times to quit.",
+                    .{Q.quit_times}
+                );
+                try editorSetStatusMessage(msg.items);
+                Q.quit_times -= 1;
+                return;
+            }
             disableRawMode();
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[2J");
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
@@ -665,4 +680,5 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
         //'w', 's', 'a', 'd' => editorMoveCursor(char),
         else => try editorInsertChar(char),
     }
+    Q.quit_times = BLIP_QUIT_TIMES;
 }
