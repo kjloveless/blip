@@ -58,6 +58,16 @@ var E: editorConfig = undefined;
 //-----------------------------------------------------------------------------
 // File I/O
 //-----------------------------------------------------------------------------
+fn editorRowsToString() !std.ArrayList(u8) {
+    var result = std.ArrayList(u8).init(std.heap.page_allocator);
+    var i: usize = 0;
+    while (i < E.numrows) : (i += 1) {
+        try result.appendSlice(E.row.items[i].chars.items);
+        try result.append('\n');
+    }
+    return result;
+}
+
 fn editorOpen(filename: []u8) !void {
     E.filename = filename;
     const file: std.fs.File = try std.fs.cwd().openFile(
@@ -82,6 +92,22 @@ fn editorOpen(filename: []u8) !void {
         }
         try editorAppendRow(line);
     }
+}
+
+fn editorSave() !void {
+    if (E.filename == null) return;
+
+    const updatedText = try editorRowsToString();
+    
+    try std.fs.cwd().writeFile(.{
+        .sub_path = E.filename.?, 
+        .data = updatedText.items, 
+        .flags = .{ 
+            .read = true,
+            .truncate = true, 
+            .mode = 0o644,
+        },
+    });
 }
 
 //-----------------------------------------------------------------------------
@@ -575,6 +601,10 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[2J");
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
             posix.exit(0);
+        },
+
+        CTRL_KEY('s') => {
+            try editorSave();
         },
 
         @intFromEnum(editorKey.HOME_KEY) => E.cx = 0,
