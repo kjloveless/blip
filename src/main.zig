@@ -47,6 +47,7 @@ const editorConfig = struct {
     screencols: u16,
     numrows: u16,
     row: std.ArrayList(erow),
+    dirty: bool,
     filename: ?[]u8,
     statusmsg: std.ArrayList(u8),
     statusmsg_time: i64,
@@ -94,6 +95,7 @@ fn editorOpen(filename: []u8) !void {
         }
         try editorAppendRow(line);
     }
+    E.dirty = false;
 }
 
 fn editorSave() !void {
@@ -114,6 +116,7 @@ fn editorSave() !void {
     };
     var msg = std.ArrayList(u8).init(std.heap.page_allocator);
     defer msg.deinit();
+    E.dirty = false;
     try std.fmt.format(msg.writer(), "written to disk", .{});
     try editorSetStatusMessage(msg.items);
 }
@@ -145,7 +148,8 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     E.rowoff = 0;
     E.coloff = 0;
     E.numrows = 0;
-    E.row = std.ArrayList(erow).init(std.heap.page_allocator); 
+    E.row = std.ArrayList(erow).init(std.heap.page_allocator);
+    E.dirty = false; 
     E.filename = null;
     E.statusmsg = std.ArrayList(u8).init(std.heap.page_allocator);
     _ = try E.statusmsg.addOne();
@@ -403,6 +407,7 @@ fn editorAppendRow(s: []u8) !void {
     try editorUpdateRow(item);
 
     E.numrows += 1;
+    E.dirty = true;
 }
 
 fn editorRowInsertChar(row: *erow, at: u16, c: u8) !void {
@@ -412,6 +417,7 @@ fn editorRowInsertChar(row: *erow, at: u16, c: u8) !void {
     }
     try row.*.chars.insert(here, c);
     try editorUpdateRow(row);
+    E.dirty = true;
 }
 
 //-----------------------------------------------------------------------------
@@ -489,25 +495,29 @@ fn editorDrawRows(append_buffer: *abuf) !void {
 
 fn editorDrawStatusBar(append_buffer: *abuf) !void {
     try abAppend(append_buffer, "\x1b[7m");
-    var status_buffer: [80]u8 = undefined;
-    var row_status_buffer: [80]u8 = undefined;
+    var status = std.ArrayList(u8).init(std.heap.page_allocator);
+    var row_status = std.ArrayList(u8).init(std.heap.page_allocator);
 
-    const status = try std.fmt.bufPrint(
-        &status_buffer,
-        "{s} - {d} lines",
-        .{ if (E.filename != null) E.filename.? else "[No Name]", E.numrows }
+    try std.fmt.format(
+        status.writer(),
+        "{s} - {d} lines {s}",
+        .{ 
+            if (E.filename != null) E.filename.? else "[No Name]", 
+            E.numrows, 
+            if (E.dirty) "modified" else "", 
+        }
     );
-    const row_status = try std.fmt.bufPrint(
-        &row_status_buffer,
+    try std.fmt.format(
+        row_status.writer(),
         "{d}/{d}",
         .{ E.cy + 1, E.numrows }
     );
 
-    try abAppend(append_buffer, status);
-    var len: usize = status.len;
+    try abAppend(append_buffer, status.items);
+    var len: usize = status.items.len;
     while (len < E.screencols) : (len += 1) {
-        if (E.screencols - len == row_status.len) {
-            try abAppend(append_buffer, row_status);
+        if (E.screencols - len == row_status.items.len) {
+            try abAppend(append_buffer, row_status.items);
             break;
         } else {
             try abAppend(append_buffer, " ");
