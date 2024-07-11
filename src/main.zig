@@ -411,12 +411,32 @@ fn editorAppendRow(s: []u8) !void {
     E.dirty = true;
 }
 
+fn editorFreeRow(row: *erow) void {
+    row.*.chars.clearAndFree();
+    row.*.render.clearAndFree();
+}
+
+fn editorDelRow(at: u16) !void {
+    if (at < 0 or at >= E.numrows) return;
+
+    editorFreeRow(&E.row.items[at]);
+    _ = E.row.orderedRemove(at);
+    E.numrows -= 1;
+    E.dirty = true;
+}
+
 fn editorRowInsertChar(row: *erow, at: u16, c: u8) !void {
     var here: usize = at;
     if (at < 0 or at > row.*.chars.items.len) {
         here = row.*.chars.items.len;
     }
     try row.*.chars.insert(here, c);
+    try editorUpdateRow(row);
+    E.dirty = true;
+}
+
+fn editorRowAppendString(row: *erow, s: []u8) !void {
+    try row.*.chars.appendSlice(s);
     try editorUpdateRow(row);
     E.dirty = true;
 }
@@ -441,11 +461,17 @@ fn editorInsertChar(c: u8) !void {
 
 fn editorDelChar() !void {
     if (E.cy == E.numrows) return;
+    if (E.cx == 0 and E.cy == 0) return;
 
     const row = &E.row.items[E.cy];
     if (E.cx > 0) {
         try editorRowDelChar(row, E.cx - 1);
         E.cx -= 1;
+    } else {
+        E.cx = @intCast(E.row.items[E.cy - 1].chars.items.len);
+        try editorRowAppendString(&E.row.items[E.cy - 1], row.*.chars.items);
+        try editorDelRow(E.cy);
+        E.cy -= 1;
     }
 }
 
