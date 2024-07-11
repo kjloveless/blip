@@ -89,6 +89,8 @@ fn editorOpen(filename: []u8) !void {
         };
         if (line.len > -1) {
             // strip newline chars
+            // may not be needed if readUntilDelimiter is exclusive of
+            // delimiter
         }
         try editorAppendRow(line);
     }
@@ -99,7 +101,7 @@ fn editorSave() !void {
 
     const updatedText = try editorRowsToString();
     
-    try std.fs.cwd().writeFile(.{
+    std.fs.cwd().writeFile(.{
         .sub_path = E.filename.?, 
         .data = updatedText.items, 
         .flags = .{ 
@@ -107,7 +109,13 @@ fn editorSave() !void {
             .truncate = true, 
             .mode = 0o644,
         },
-    });
+    }) catch {
+        try editorSetStatusMessage("Failed to save! I/O error: "); 
+    };
+    var msg = std.ArrayList(u8).init(std.heap.page_allocator);
+    defer msg.deinit();
+    try std.fmt.format(msg.writer(), "written to disk", .{});
+    try editorSetStatusMessage(msg.items);
 }
 
 //-----------------------------------------------------------------------------
@@ -162,7 +170,7 @@ pub fn main() !void {
         try editorOpen(args[1]);
     }
 
-    try editorSetStatusMessage("Help: Ctrl-Q = quit");
+    try editorSetStatusMessage("Help: Ctrl-S = save | Ctrl-Q = quit");
 
     while (true) {
         try editorRefreshScreen(stdout);
