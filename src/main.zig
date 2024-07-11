@@ -421,6 +421,13 @@ fn editorRowInsertChar(row: *erow, at: u16, c: u8) !void {
     E.dirty = true;
 }
 
+fn editorRowDelChar(row: *erow, at: u16) !void {
+    if (at < 0 or at >= row.*.chars.items.len) return;
+    _ = row.*.chars.orderedRemove(at);
+    try editorUpdateRow(row);
+    E.dirty = true;
+}
+
 //-----------------------------------------------------------------------------
 // Editor Operations
 //-----------------------------------------------------------------------------
@@ -430,6 +437,16 @@ fn editorInsertChar(c: u8) !void {
     }
     try editorRowInsertChar(&E.row.items[E.cy], E.cx, c);
     E.cx += 1;
+}
+
+fn editorDelChar() !void {
+    if (E.cy == E.numrows) return;
+
+    const row = &E.row.items[E.cy];
+    if (E.cx > 0) {
+        try editorRowDelChar(row, E.cx - 1);
+        E.cx -= 1;
+    }
 }
 
 //-----------------------------------------------------------------------------
@@ -649,7 +666,12 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
         },
 
         @intFromEnum(editorKey.BACKSPACE), @intFromEnum(editorKey.DEL_KEY),
-        CTRL_KEY('h') => {},
+        CTRL_KEY('h') => {
+            if (char == @intFromEnum(editorKey.DEL_KEY)) {
+                editorMoveCursor(@intFromEnum(editorKey.ARROW_RIGHT));
+            }
+            try editorDelChar();
+        },
 
         @intFromEnum(editorKey.PAGE_UP), @intFromEnum(editorKey.PAGE_DOWN) => {
             if (char == @intFromEnum(editorKey.PAGE_UP)) {

@@ -1,5 +1,5 @@
 # blip [w.i.p.]
-## test
+
 ### kilo like text editor
 #### min. zig version = 0.13.0
 
