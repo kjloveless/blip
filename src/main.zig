@@ -53,6 +53,8 @@ const editorConfig = struct {
     statusmsg: std.ArrayList(u8),
     statusmsg_time: i64,
     original_termios: posix.termios,
+    reader: std.fs.File.Reader,
+    writer: std.fs.File.Writer,
 };
 
 var E: editorConfig = undefined;
@@ -100,7 +102,13 @@ fn editorOpen(filename: []u8) !void {
 }
 
 fn editorSave() !void {
-    if (E.filename == null) return;
+    if (E.filename == null) {
+        E.filename = try editorPrompt(E.writer, E.reader, "Save as: {s}");
+        if (E.filename == null) {
+            try editorSetStatusMessage("Save aborted");
+            return;
+        }
+    }
 
     const updatedText = try editorRowsToString();
     
@@ -156,6 +164,8 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
     _ = try E.statusmsg.addOne();
     E.statusmsg.items[0] = '\x00';
     E.statusmsg_time = 0;
+    E.reader = io.getStdIn().reader();
+    E.writer = io.getStdOut().writer();
 
     if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
@@ -166,9 +176,9 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
 pub fn main() !void {
     enableRawMode();
     defer(disableRawMode());
-    const stdin = io.getStdIn().reader();
-    const stdout = io.getStdOut().writer();
-    try initEditor(stdout, stdin);
+    //const stdin = io.getStdIn().reader();
+    //const stdout = io.getStdOut().writer();
+    try initEditor(E.writer, E.reader);
     const args = try std.process.argsAlloc(std.heap.page_allocator);
     defer std.process.argsFree(std.heap.page_allocator, args);
     if (args.len >= 2) {
@@ -178,8 +188,8 @@ pub fn main() !void {
     try editorSetStatusMessage("Help: Ctrl-S = save | Ctrl-Q = quit");
 
     while (true) {
-        try editorRefreshScreen(stdout);
-        try editorProcessKeypress(stdin);
+        try editorRefreshScreen(E.writer);
+        try editorProcessKeypress(E.reader);
     }
 }
 
@@ -200,8 +210,8 @@ fn die(msg: []const u8, err: anyerror) noreturn {
     posix.exit(1);
 }
 
-fn iscntrl(c: *[1]u8) bool {
-    return ((c[0] >= 0 and c[0] < 32) or c[0] == 127);
+fn iscntrl(c: u8) bool {
+    return ((c >= 0 and c < 32) or c == 127);
 }
 
 fn enableRawMode() void {
@@ -632,6 +642,38 @@ fn editorSetStatusMessage(msg: []const u8) !void {
 //-----------------------------------------------------------------------------
 // Input
 //-----------------------------------------------------------------------------
+fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, prompt: []const u8) !?[]u8 {
+    _ = &prompt; // fix this later
+    var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+    
+    while (true) {
+        var msg = std.ArrayList(u8).init(std.heap.page_allocator);
+        try std.fmt.format(msg.writer(), "Save As: {s} (ESC to cancel)", .{ buffer.items });
+        try editorSetStatusMessage(msg.items);
+        try editorRefreshScreen(writer);
+        
+        const c = try editorReadKey(reader);
+        if (c == @intFromEnum(editorKey.DEL_KEY) or c == CTRL_KEY('h') or c ==
+            @intFromEnum(editorKey.BACKSPACE)) {
+            if (buffer.items.len != 0) {
+                _ = buffer.pop();
+            }
+        }
+        if (c == '\x1b') {
+            try editorSetStatusMessage("");
+            buffer.clearAndFree();
+            return null;
+        } else if (c == '\r') {
+            if (buffer.items.len != 0) {
+                try editorSetStatusMessage("");
+                return buffer.items;
+            }
+        } else if (!iscntrl(c) and c < 128) {
+            try buffer.append(c);
+        }
+    }
+}
+
 fn editorMoveCursor(key: u8) void {
     var row: ?*erow = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
     switch (key) {
