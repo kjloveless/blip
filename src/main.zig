@@ -94,7 +94,7 @@ fn editorOpen(filename: []u8) !void {
             // may not be needed if readUntilDelimiter is exclusive of
             // delimiter
         }
-        try editorAppendRow(line);
+        try editorInsertRow(E.numrows, line);
     }
     E.dirty = false;
 }
@@ -397,14 +397,20 @@ fn editorUpdateRow(row: *erow) !void {
     }
 }
 
-fn editorAppendRow(s: []u8) !void {
-    _ = try E.row.addOne();
-    const at: u16 = E.numrows;
+fn editorInsertRow(at: u16, s: []u8) !void {
+    if (at < 0 or at > E.numrows) return;
+
+    try E.row.insert(at, erow{
+        .chars = std.ArrayList(u8).init(std.heap.page_allocator),
+        .render = std.ArrayList(u8).init(std.heap.page_allocator),
+    });
+    //_ = try E.row.addOne();
+    //const at: u16 = E.numrows;
     const item = &E.row.items[at];
-    item.*.chars = std.ArrayList(u8).init(std.heap.page_allocator);
+    //item.*.chars = std.ArrayList(u8).init(std.heap.page_allocator);
     try item.*.chars.appendSlice(s);
 
-    item.*.render = std.ArrayList(u8).init(std.heap.page_allocator);
+    //item.*.render = std.ArrayList(u8).init(std.heap.page_allocator);
     try editorUpdateRow(item);
 
     E.numrows += 1;
@@ -453,10 +459,23 @@ fn editorRowDelChar(row: *erow, at: u16) !void {
 //-----------------------------------------------------------------------------
 fn editorInsertChar(c: u8) !void {
     if (E.cy == E.numrows) {
-        try editorAppendRow("");
+        try editorInsertRow(E.numrows, "");
     }
     try editorRowInsertChar(&E.row.items[E.cy], E.cx, c);
     E.cx += 1;
+}
+
+fn editorInsertNewline() !void {
+    if (E.cx == 0) {
+        try editorInsertRow(E.cy, "");
+    } else {
+        const row = &E.row.items[E.cy];
+        try editorInsertRow(E.cy + 1, row.*.chars.items[E.cx..]);
+        row.chars.items = row.chars.items[0..E.cx];
+        try editorUpdateRow(row);
+    }
+    E.cy += 1;
+    E.cx = 0;
 }
 
 fn editorDelChar() !void {
@@ -659,7 +678,7 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
     };
 
     switch (char) {
-        '\r' => {},
+        '\r' => try editorInsertNewline(),
 
         CTRL_KEY('q') => {
             if (E.dirty and Q.quit_times > 0) {
