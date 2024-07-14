@@ -155,11 +155,23 @@ fn editorFindCallback(query: *[] u8, key: u16) void {
 }
 
 fn editorFind() !void {
-    _ = try editorPrompt(
+    const saved_cx = E.cx;
+    const saved_cy = E.cy;
+    const saved_coloff = E.coloff;
+    const saved_rowoff = E.rowoff;
+
+    const query = try editorPrompt(
         E.writer, 
         E.reader, 
         "Search: {s} (ESC to cancel)",
         &editorFindCallback);
+
+    if (query == null) {
+        E.cx = saved_cx;
+        E.cy = saved_cy;
+        E.coloff = saved_coloff;
+        E.rowoff = saved_rowoff;
+    }
 }
 
 //-----------------------------------------------------------------------------
