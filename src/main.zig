@@ -128,6 +128,26 @@ fn editorSave() !void {
 }
 
 //-----------------------------------------------------------------------------
+// Find
+//-----------------------------------------------------------------------------
+fn editorFind() !void {
+    const query = try editorPrompt(E.writer, E.reader, "Search: {s} (ESC to cancel)");
+    if (query == null) return;
+
+    var i: u16 = 0;
+    while (i < E.numrows) : (i += 1) {
+        const row = &E.row.items[i];
+        const match = std.mem.indexOf(u8, row.render.items, query.?);
+        if (match != null) {
+            E.cy = i;
+            E.cx = editorRowRxToCx(row, @intCast(match.?));
+            E.rowoff = E.numrows;
+            break;
+        }
+    }
+}
+
+//-----------------------------------------------------------------------------
 // Append Buffer
 //-----------------------------------------------------------------------------
 const abuf = struct {
@@ -182,7 +202,9 @@ pub fn main() !void {
         try editorOpen(args[1]);
     }
 
-    try editorSetStatusMessage("Help: Ctrl-S = save | Ctrl-Q = quit", .{});
+    try editorSetStatusMessage(
+        "Help: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find", 
+        .{});
 
     while (true) {
         try editorRefreshScreen(E.writer);
@@ -390,6 +412,24 @@ fn editorRowCxToRx(row: *erow, cx: u16) u16 {
         rx += 1;
     }
     return rx;
+}
+
+fn editorRowRxToCx(row: *erow, rx: u16) u16 {
+    var cur_rx: u16 = 0;
+    var cx: u16 = 0;
+    
+    while (cx < row.*.chars.items.len) : (cx += 1) {
+        if (row.*.chars.items[cx] == '\t') {
+            cur_rx += (BLIP_TAB_STOP - 1) - (cur_rx % BLIP_TAB_STOP);
+        }
+        cur_rx += 1;
+
+        if (cur_rx > rx) {
+            return cx;
+        }
+    }
+
+    return cx;
 }
 
 fn editorUpdateRow(row: *erow) !void {
@@ -742,6 +782,10 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             if (E.cy < E.numrows) {
                 E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
+        },
+
+        CTRL_KEY('f') => {
+            try editorFind();
         },
 
         @intFromEnum(editorKey.BACKSPACE), @intFromEnum(editorKey.DEL_KEY),
