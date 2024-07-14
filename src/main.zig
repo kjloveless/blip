@@ -136,16 +136,42 @@ fn editorSave() !void {
 // Find
 //-----------------------------------------------------------------------------
 fn editorFindCallback(query: *[] u8, key: u16) void {
+    const static = struct {
+        var last_match: isize = -1;
+        var direction: isize = 1;
+    };
+
     if (key == '\r' or key == '\x1b') {
+        static.last_match = -1;
+        static.direction = 1;
         return;
+    } else if (key == @intFromEnum(editorKey.ARROW_RIGHT) 
+        or key == @intFromEnum(editorKey.ARROW_DOWN)) {
+        static.direction = 1;
+    } else if (key == @intFromEnum(editorKey.ARROW_LEFT)
+        or key == @intFromEnum(editorKey.ARROW_UP)) {
+        static.direction = -1;
+    } else {
+        static.last_match = -1;
+        static.direction = 1;
     }
 
+    if (static.last_match == -1) static.direction = 1;
+    var current: isize = static.last_match;
     var i: u16 = 0;
     while (i < E.numrows) : (i += 1) {
-        const row = &E.row.items[i];
+        current += static.direction;
+        if (current == -1) {
+            current = E.numrows - 1;
+        } else if (current == E.numrows) {
+            current = 0;
+        }
+
+        const row = &E.row.items[@intCast(current)];
         const match = std.mem.indexOf(u8, row.render.items, query.*);
         if (match != null) {
-            E.cy = i;
+            static.last_match = current;
+            E.cy = @intCast(current);
             E.cx = editorRowRxToCx(row, @intCast(match.?));
             E.rowoff = E.numrows;
             break;
@@ -163,7 +189,7 @@ fn editorFind() !void {
     const query = try editorPrompt(
         E.writer, 
         E.reader, 
-        "Search: {s} (ESC to cancel)",
+        "Search: {s} (Use ESC/Arrows/Enter)",
         &editorFindCallback);
 
     if (query == null) {
