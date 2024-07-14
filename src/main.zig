@@ -103,7 +103,7 @@ fn editorOpen(filename: []u8) !void {
 
 fn editorSave() !void {
     if (E.filename == null) {
-        E.filename = try editorPrompt(E.writer, E.reader, "Save as: {s}");
+        E.filename = try editorPrompt(E.writer, E.reader, "Save as: {s} (ESC to cancel)");
         if (E.filename == null) {
             try editorSetStatusMessage("Save aborted", .{});
             return;
@@ -641,12 +641,12 @@ fn editorSetStatusMessage(comptime msg: []const u8, args: anytype) !void {
 //-----------------------------------------------------------------------------
 // Input
 //-----------------------------------------------------------------------------
-fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, prompt: []const u8) !?[]u8 {
+fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, comptime prompt: []const u8) !?[]u8 {
     _ = &prompt; // fix this later
     var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
     
     while (true) {
-        try editorSetStatusMessage("Save As: {s} (ESC to cancel)", .{ buffer.items });
+        try editorSetStatusMessage(prompt, .{ buffer.items });
         try editorRefreshScreen(writer);
         
         const c = try editorReadKey(reader);
