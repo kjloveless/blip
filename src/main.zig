@@ -103,7 +103,12 @@ fn editorOpen(filename: []u8) !void {
 
 fn editorSave() !void {
     if (E.filename == null) {
-        E.filename = try editorPrompt(E.writer, E.reader, "Save as: {s} (ESC to cancel)");
+        E.filename = try editorPrompt(
+            E.writer, 
+            E.reader, 
+            "Save as: {s} (ESC to cancel)",
+            null);
+
         if (E.filename == null) {
             try editorSetStatusMessage("Save aborted", .{});
             return;
@@ -130,14 +135,15 @@ fn editorSave() !void {
 //-----------------------------------------------------------------------------
 // Find
 //-----------------------------------------------------------------------------
-fn editorFind() !void {
-    const query = try editorPrompt(E.writer, E.reader, "Search: {s} (ESC to cancel)");
-    if (query == null) return;
+fn editorFindCallback(query: *[] u8, key: u16) void {
+    if (key == '\r' or key == '\x1b') {
+        return;
+    }
 
     var i: u16 = 0;
     while (i < E.numrows) : (i += 1) {
         const row = &E.row.items[i];
-        const match = std.mem.indexOf(u8, row.render.items, query.?);
+        const match = std.mem.indexOf(u8, row.render.items, query.*);
         if (match != null) {
             E.cy = i;
             E.cx = editorRowRxToCx(row, @intCast(match.?));
@@ -145,6 +151,15 @@ fn editorFind() !void {
             break;
         }
     }
+
+}
+
+fn editorFind() !void {
+    _ = try editorPrompt(
+        E.writer, 
+        E.reader, 
+        "Search: {s} (ESC to cancel)",
+        &editorFindCallback);
 }
 
 //-----------------------------------------------------------------------------
@@ -681,7 +696,12 @@ fn editorSetStatusMessage(comptime msg: []const u8, args: anytype) !void {
 //-----------------------------------------------------------------------------
 // Input
 //-----------------------------------------------------------------------------
-fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, comptime prompt: []const u8) !?[]u8 {
+fn editorPrompt(
+    writer: std.fs.File.Writer, 
+    reader: std.fs.File.Reader, 
+    comptime prompt: []const u8,
+    callback: ?*const fn (*[] u8, u16) void
+) !?[]u8 {
     _ = &prompt; // fix this later
     var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
     
@@ -698,15 +718,25 @@ fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, comptime
         }
         if (c == '\x1b') {
             try editorSetStatusMessage("", .{});
+            if (callback != null) {
+                callback.?(&buffer.items, c);
+            }
             buffer.clearAndFree();
             return null;
         } else if (c == '\r') {
             if (buffer.items.len != 0) {
                 try editorSetStatusMessage("", .{});
+                if (callback != null) {
+                    callback.?(&buffer.items, c);
+                }
                 return buffer.items;
             }
         } else if (!iscntrl(c) and c < 128) {
             try buffer.append(c);
+        }
+
+        if (callback != null) {
+            callback.?(&buffer.items, c);
         }
     }
 }
