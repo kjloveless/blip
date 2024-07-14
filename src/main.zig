@@ -105,7 +105,7 @@ fn editorSave() !void {
     if (E.filename == null) {
         E.filename = try editorPrompt(E.writer, E.reader, "Save as: {s}");
         if (E.filename == null) {
-            try editorSetStatusMessage("Save aborted");
+            try editorSetStatusMessage("Save aborted", .{});
             return;
         }
     }
@@ -121,13 +121,10 @@ fn editorSave() !void {
             .mode = 0o644,
         },
     }) catch {
-        try editorSetStatusMessage("Failed to save! I/O error: "); 
+        try editorSetStatusMessage("Failed to save! I/O error: ", .{}); // add err message
     };
-    var msg = std.ArrayList(u8).init(std.heap.page_allocator);
-    defer msg.deinit();
     E.dirty = false;
-    try std.fmt.format(msg.writer(), "written to disk", .{});
-    try editorSetStatusMessage(msg.items);
+    try editorSetStatusMessage("written to disk", .{});
 }
 
 //-----------------------------------------------------------------------------
@@ -185,7 +182,7 @@ pub fn main() !void {
         try editorOpen(args[1]);
     }
 
-    try editorSetStatusMessage("Help: Ctrl-S = save | Ctrl-Q = quit");
+    try editorSetStatusMessage("Help: Ctrl-S = save | Ctrl-Q = quit", .{});
 
     while (true) {
         try editorRefreshScreen(E.writer);
@@ -633,9 +630,11 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
     abFree(&append_buffer);
 }
 
-fn editorSetStatusMessage(msg: []const u8) !void {
+fn editorSetStatusMessage(comptime msg: []const u8, args: anytype) !void {
     E.statusmsg.clearAndFree();
-    try E.statusmsg.appendSlice(msg);
+    var formattedMsg = std.ArrayList(u8).init(std.heap.page_allocator);
+    try std.fmt.format(formattedMsg.writer(), msg, args);
+    try E.statusmsg.appendSlice(formattedMsg.items);
     E.statusmsg_time = std.time.timestamp();
 }
 
@@ -647,9 +646,7 @@ fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, prompt: 
     var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
     
     while (true) {
-        var msg = std.ArrayList(u8).init(std.heap.page_allocator);
-        try std.fmt.format(msg.writer(), "Save As: {s} (ESC to cancel)", .{ buffer.items });
-        try editorSetStatusMessage(msg.items);
+        try editorSetStatusMessage("Save As: {s} (ESC to cancel)", .{ buffer.items });
         try editorRefreshScreen(writer);
         
         const c = try editorReadKey(reader);
@@ -660,12 +657,12 @@ fn editorPrompt(writer: std.fs.File.Writer, reader: std.fs.File.Reader, prompt: 
             }
         }
         if (c == '\x1b') {
-            try editorSetStatusMessage("");
+            try editorSetStatusMessage("", .{});
             buffer.clearAndFree();
             return null;
         } else if (c == '\r') {
             if (buffer.items.len != 0) {
-                try editorSetStatusMessage("");
+                try editorSetStatusMessage("", .{});
                 return buffer.items;
             }
         } else if (!iscntrl(c) and c < 128) {
@@ -724,13 +721,8 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
 
         CTRL_KEY('q') => {
             if (E.dirty and Q.quit_times > 0) {
-                var msg = std.ArrayList(u8).init(std.heap.page_allocator);
-                try std.fmt.format(
-                    msg.writer(),
-                    "WARNING!!! File has unsaved changes. Press Ctrl-Q {d} more times to quit.",
-                    .{Q.quit_times}
-                );
-                try editorSetStatusMessage(msg.items);
+                try editorSetStatusMessage("WARNING!!! File has unsaved changes. Press Ctrl-Q {d} more times to quit." 
+                    , .{ Q.quit_times });
                 Q.quit_times -= 1;
                 return;
             }
