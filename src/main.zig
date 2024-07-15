@@ -147,13 +147,13 @@ fn editorFindCallback(query: *[] u8, key: u16) error{OutOfMemory}!void {
     const static = struct {
         var last_match: isize = -1;
         var direction: isize = 1;
-        var saved_hl_line: u8 = undefined;
+        var saved_hl_line: isize = undefined;
         var saved_hl: std.ArrayList(u8) = undefined;
     };
 
     if (static.saved_hl.items.len > 0) {
-        E.row.items[static.saved_hl_line].hl.clearAndFree();
-        E.row.items[static.saved_hl_line].hl = try static.saved_hl.clone();
+        E.row.items[@intCast(static.saved_hl_line)].hl.clearAndFree();
+        E.row.items[@intCast(static.saved_hl_line)].hl = try static.saved_hl.clone();
     }
 
     if (key == '\r' or key == '\x1b') {
@@ -191,7 +191,7 @@ fn editorFindCallback(query: *[] u8, key: u16) error{OutOfMemory}!void {
             E.rowoff = E.numrows;
             var offset: usize = 0;
 
-            static.saved_hl_line = @intCast(current);
+            static.saved_hl_line = current;
             static.saved_hl = try row.*.hl.clone();
             //static.saved_hl = try row.*.hl.clone(); 
             while (offset < query.*.len) : (offset += 1) {
@@ -271,6 +271,7 @@ fn initEditor(
 pub fn main() !void {
     enableRawMode();
     defer(disableRawMode());
+    errdefer(disableRawMode());
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer {
