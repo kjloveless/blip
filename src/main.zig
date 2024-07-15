@@ -643,9 +643,25 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 try abAppend(append_buffer, "~");
             }
         } else {
-            if (E.row.items[filerow].render.items.len > E.coloff) {
-                try abAppend(append_buffer,
-                    E.row.items[filerow].render.items[E.coloff..]);
+            const render_len = E.row.items[filerow].render.items.len;
+            
+            if (E.coloff < render_len) {
+                var len = render_len - E.coloff;
+
+                if (len > E.screencols) len = E.screencols;
+            
+                const start = E.coloff;
+                const end = @min(start + len, render_len);
+
+                for (E.row.items[filerow].render.items[start..end]) |c| {
+                    if (std.ascii.isDigit(c)) {
+                        try abAppend(append_buffer, "\x1b[31m");
+                        try abAppend(append_buffer, &[_]u8{c});
+                        try abAppend(append_buffer, "\x1b[39m");
+                    } else {
+                        try abAppend(append_buffer, &[_]u8{c});
+                    }
+                }
             } else {
                 try abAppend(append_buffer, "");
             }
