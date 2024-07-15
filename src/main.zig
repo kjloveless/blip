@@ -143,11 +143,18 @@ fn editorSave() !void {
 //-----------------------------------------------------------------------------
 // Find
 //-----------------------------------------------------------------------------
-fn editorFindCallback(query: *[] u8, key: u16) void {
+fn editorFindCallback(query: *[] u8, key: u16) error{OutOfMemory}!void {
     const static = struct {
         var last_match: isize = -1;
         var direction: isize = 1;
+        var saved_hl_line: u8 = undefined;
+        var saved_hl: std.ArrayList(u8) = undefined;
     };
+
+    if (static.saved_hl.items.len > 0) {
+        E.row.items[static.saved_hl_line].hl.clearAndFree();
+        E.row.items[static.saved_hl_line].hl = try static.saved_hl.clone();
+    }
 
     if (key == '\r' or key == '\x1b') {
         static.last_match = -1;
@@ -182,7 +189,14 @@ fn editorFindCallback(query: *[] u8, key: u16) void {
             E.cy = @intCast(current);
             E.cx = editorRowRxToCx(row, @intCast(match.?));
             E.rowoff = E.numrows;
-            row.*.hl.items[match.?] = @intFromEnum(editorHighlight.HL_MATCH);
+            var offset: usize = 0;
+
+            static.saved_hl_line = @intCast(current);
+            static.saved_hl = try row.*.hl.clone();
+            //static.saved_hl = try row.*.hl.clone(); 
+            while (offset < query.*.len) : (offset += 1) {
+                row.*.hl.items[match.? + offset] = @intFromEnum(editorHighlight.HL_MATCH);
+            }
             break;
         }
     }
@@ -812,7 +826,7 @@ fn editorPrompt(
     writer: std.fs.File.Writer, 
     reader: std.fs.File.Reader, 
     comptime prompt: []const u8,
-    callback: ?*const fn (*[] u8, u16) void
+    callback: ?*const fn (*[] u8, u16) error{OutOfMemory}!void
 ) !?[]u8 {
     _ = &prompt; // fix this later
     var buffer = std.ArrayList(u8).init(E.allocator);
@@ -831,7 +845,7 @@ fn editorPrompt(
         if (c == '\x1b') {
             try editorSetStatusMessage("", .{});
             if (callback != null) {
-                callback.?(&buffer.items, c);
+                try callback.?(&buffer.items, c);
             }
             buffer.clearAndFree();
             return null;
@@ -839,7 +853,7 @@ fn editorPrompt(
             if (buffer.items.len != 0) {
                 try editorSetStatusMessage("", .{});
                 if (callback != null) {
-                    callback.?(&buffer.items, c);
+                    try callback.?(&buffer.items, c);
                 }
                 return buffer.items;
             }
@@ -848,7 +862,7 @@ fn editorPrompt(
         }
 
         if (callback != null) {
-            callback.?(&buffer.items, c);
+            try callback.?(&buffer.items, c);
         }
     }
 }
