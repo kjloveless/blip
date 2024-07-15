@@ -33,6 +33,7 @@ const editorKey = enum(u8) {
 const editorHighlight = enum(u8) {
     HL_NORMAL = 0,
     HL_NUMBER,
+    HL_MATCH,
 };
 
 //------------------------------------------------------------------------------
@@ -180,6 +181,7 @@ fn editorFindCallback(query: *[] u8, key: u16) void {
             E.cy = @intCast(current);
             E.cx = editorRowRxToCx(row, @intCast(match.?));
             E.rowoff = E.numrows;
+            row.*.hl.items[match.?] = @intFromEnum(editorHighlight.HL_MATCH);
             break;
         }
     }
@@ -477,6 +479,7 @@ fn editorUpdateSyntax(row: *erow) !void {
 fn editorSyntaxToColor(hl: u8) u8 {
     switch (hl) {
         @intFromEnum(editorHighlight.HL_NUMBER) => return 31,
+        @intFromEnum(editorHighlight.HL_MATCH) => return 34,
         else => return 37,
     }
 }
