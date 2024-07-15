@@ -30,12 +30,18 @@ const editorKey = enum(u8) {
     PAGE_DOWN,
 };
 
+const editorHighlight = enum(u8) {
+    HL_NORMAL = 0,
+    HL_NUMBER,
+};
+
 //------------------------------------------------------------------------------
 // Data 
 //------------------------------------------------------------------------------
 const erow = struct {
     chars: std.ArrayList(u8),
     render: std.ArrayList(u8),
+    hl: std.ArrayList(u8),
 };
 
 const editorConfig = struct {
@@ -453,6 +459,29 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 }
 
 //-----------------------------------------------------------------------------
+// Syntax Highlighting
+//-----------------------------------------------------------------------------
+fn editorUpdateSyntax(row: *erow) !void {
+    row.*.hl.clearAndFree();
+
+    var i: usize = 0;
+    while (i < row.*.render.items.len) : (i += 1) {
+        if (std.ascii.isDigit(row.*.render.items[i])) {
+            try row.*.hl.append(@intFromEnum(editorHighlight.HL_NUMBER));
+        } else {
+            try row.*.hl.append(@intFromEnum(editorHighlight.HL_NORMAL));
+        }
+    }
+}
+
+fn editorSyntaxToColor(hl: u8) u8 {
+    switch (hl) {
+        @intFromEnum(editorHighlight.HL_NUMBER) => return 31,
+        else => return 37,
+    }
+}
+
+//-----------------------------------------------------------------------------
 // Row Operations
 //-----------------------------------------------------------------------------
 fn editorRowCxToRx(row: *erow, cx: u16) u16 {
@@ -495,6 +524,8 @@ fn editorUpdateRow(row: *erow) !void {
             try row.*.render.append(row.*.chars.items[i]);
         }
     }
+
+    try editorUpdateSyntax(row);
 }
 
 fn editorInsertRow(at: u16, s: []u8) !void {
@@ -503,14 +534,11 @@ fn editorInsertRow(at: u16, s: []u8) !void {
     try E.row.insert(at, erow{
         .chars = std.ArrayList(u8).init(std.heap.page_allocator),
         .render = std.ArrayList(u8).init(std.heap.page_allocator),
+        .hl = std.ArrayList(u8).init(std.heap.page_allocator),
     });
-    //_ = try E.row.addOne();
-    //const at: u16 = E.numrows;
     const item = &E.row.items[at];
-    //item.*.chars = std.ArrayList(u8).init(std.heap.page_allocator);
-    try item.*.chars.appendSlice(s);
 
-    //item.*.render = std.ArrayList(u8).init(std.heap.page_allocator);
+    try item.*.chars.appendSlice(s);
     try editorUpdateRow(item);
 
     E.numrows += 1;
@@ -520,6 +548,7 @@ fn editorInsertRow(at: u16, s: []u8) !void {
 fn editorFreeRow(row: *erow) void {
     row.*.chars.clearAndFree();
     row.*.render.clearAndFree();
+    row.*.hl.clearAndFree();
 }
 
 fn editorDelRow(at: u16) !void {
@@ -653,15 +682,34 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 const start = E.coloff;
                 const end = @min(start + len, render_len);
 
-                for (E.row.items[filerow].render.items[start..end]) |c| {
-                    if (std.ascii.isDigit(c)) {
-                        try abAppend(append_buffer, "\x1b[31m");
+                var i = start;
+                var current_color: isize = -1;
+                while (i < end) : (i += 1) {
+                    const c = E.row.items[filerow].render.items[i];
+                    const hl = E.row.items[filerow].hl.items[i];
+
+                    if (hl == @intFromEnum(editorHighlight.HL_NORMAL)) {
+                        if (current_color != -1) {
+                            try abAppend(append_buffer, "\x1b[39m");
+                            current_color = -1;
+                        }
                         try abAppend(append_buffer, &[_]u8{c});
-                        try abAppend(append_buffer, "\x1b[39m");
                     } else {
+                        const color = editorSyntaxToColor(hl);
+                        if (color != current_color) {
+                            current_color = color;
+                            var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+                            try std.fmt.format(
+                                buffer.writer(), 
+                                "\x1b[{d}m",
+                                .{color});
+                
+                            try abAppend(append_buffer, buffer.items);
+                        }
                         try abAppend(append_buffer, &[_]u8{c});
                     }
                 }
+                try abAppend(append_buffer, "\x1b[39m");
             } else {
                 try abAppend(append_buffer, "");
             }
