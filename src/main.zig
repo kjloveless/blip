@@ -62,6 +62,7 @@ const editorConfig = struct {
     original_termios: posix.termios,
     reader: std.fs.File.Reader,
     writer: std.fs.File.Writer,
+    allocator: std.mem.Allocator,
 };
 
 var E: editorConfig = undefined;
@@ -70,7 +71,7 @@ var E: editorConfig = undefined;
 // File I/O
 //-----------------------------------------------------------------------------
 fn editorRowsToString() !std.ArrayList(u8) {
-    var result = std.ArrayList(u8).init(std.heap.page_allocator);
+    var result = std.ArrayList(u8).init(E.allocator);
     var i: usize = 0;
     while (i < E.numrows) : (i += 1) {
         try result.appendSlice(E.row.items[i].chars.items);
@@ -91,7 +92,7 @@ fn editorOpen(filename: []u8) !void {
 
     while(true) {
         const line = input_stream.readUntilDelimiterAlloc(
-            std.heap.page_allocator, 
+            E.allocator, 
             '\n',
             std.math.maxInt(u16),
         ) catch |err| {
@@ -228,24 +229,26 @@ fn abFree(append_buffer: *abuf) void {
 //------------------------------------------------------------------------------
 // Init
 //------------------------------------------------------------------------------
-fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
+fn initEditor(
+    allocator: std.mem.Allocator,
+) !void {
+    E.allocator = allocator;
     E.cx = 0;
     E.cy = 0;
     E.rx = 0;
     E.rowoff = 0;
     E.coloff = 0;
     E.numrows = 0;
-    E.row = std.ArrayList(erow).init(std.heap.page_allocator);
+    E.row = std.ArrayList(erow).init(E.allocator);
     E.dirty = false; 
     E.filename = null;
-    E.statusmsg = std.ArrayList(u8).init(std.heap.page_allocator);
-    _ = try E.statusmsg.addOne();
-    E.statusmsg.items[0] = '\x00';
+    E.statusmsg = std.ArrayList(u8).init(E.allocator);
+    try E.statusmsg.append('\x00');
     E.statusmsg_time = 0;
     E.reader = io.getStdIn().reader();
     E.writer = io.getStdOut().writer();
 
-    if (try getWindowSize(writer, reader, &E.screenrows, &E.screencols) == -1) {
+    if (try getWindowSize(E.writer, E.reader, &E.screenrows, &E.screencols) == -1) {
         die("getWindowSize", error.WriteError); //pass correct error
     }
     E.screenrows -= 2;
@@ -254,11 +257,15 @@ fn initEditor(writer: std.fs.File.Writer, reader: std.fs.File.Reader) !void {
 pub fn main() !void {
     enableRawMode();
     defer(disableRawMode());
-    //const stdin = io.getStdIn().reader();
-    //const stdout = io.getStdOut().writer();
-    try initEditor(E.writer, E.reader);
-    const args = try std.process.argsAlloc(std.heap.page_allocator);
-    defer std.process.argsFree(std.heap.page_allocator, args);
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const allocator = gpa.allocator();
+    defer {
+        _ = gpa.deinit();
+    }
+
+    try initEditor(allocator);
+    const args = try std.process.argsAlloc(E.allocator);
+    defer E.allocator.free(args);
     if (args.len >= 2) {
         try editorOpen(args[1]);
     }
@@ -535,9 +542,9 @@ fn editorInsertRow(at: u16, s: []u8) !void {
     if (at < 0 or at > E.numrows) return;
 
     try E.row.insert(at, erow{
-        .chars = std.ArrayList(u8).init(std.heap.page_allocator),
-        .render = std.ArrayList(u8).init(std.heap.page_allocator),
-        .hl = std.ArrayList(u8).init(std.heap.page_allocator),
+        .chars = std.ArrayList(u8).init(E.allocator),
+        .render = std.ArrayList(u8).init(E.allocator),
+        .hl = std.ArrayList(u8).init(E.allocator),
     });
     const item = &E.row.items[at];
 
@@ -701,7 +708,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                         const color = editorSyntaxToColor(hl);
                         if (color != current_color) {
                             current_color = color;
-                            var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+                            var buffer = std.ArrayList(u8).init(E.allocator);
                             try std.fmt.format(
                                 buffer.writer(), 
                                 "\x1b[{d}m",
@@ -725,8 +732,8 @@ fn editorDrawRows(append_buffer: *abuf) !void {
 
 fn editorDrawStatusBar(append_buffer: *abuf) !void {
     try abAppend(append_buffer, "\x1b[7m");
-    var status = std.ArrayList(u8).init(std.heap.page_allocator);
-    var row_status = std.ArrayList(u8).init(std.heap.page_allocator);
+    var status = std.ArrayList(u8).init(E.allocator);
+    var row_status = std.ArrayList(u8).init(E.allocator);
 
     try std.fmt.format(
         status.writer(),
@@ -792,7 +799,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 
 fn editorSetStatusMessage(comptime msg: []const u8, args: anytype) !void {
     E.statusmsg.clearAndFree();
-    var formattedMsg = std.ArrayList(u8).init(std.heap.page_allocator);
+    var formattedMsg = std.ArrayList(u8).init(E.allocator);
     try std.fmt.format(formattedMsg.writer(), msg, args);
     try E.statusmsg.appendSlice(formattedMsg.items);
     E.statusmsg_time = std.time.timestamp();
@@ -808,7 +815,7 @@ fn editorPrompt(
     callback: ?*const fn (*[] u8, u16) void
 ) !?[]u8 {
     _ = &prompt; // fix this later
-    var buffer = std.ArrayList(u8).init(std.heap.page_allocator);
+    var buffer = std.ArrayList(u8).init(E.allocator);
     
     while (true) {
         try editorSetStatusMessage(prompt, .{ buffer.items });
