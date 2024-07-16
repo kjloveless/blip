@@ -10,7 +10,7 @@ const posix = std.posix;
 // Defines
 //------------------------------------------------------------------------------
 const BLIP_VERSION: []const u8 = "0.0.1";
-const BLIP_TAB_STOP: u8 = 8;
+const BLIP_TAB_STOP: u8 = 4;
 const BLIP_QUIT_TIMES: u2 = 3;
 
 fn CTRL_KEY(key: u8) u8 {
