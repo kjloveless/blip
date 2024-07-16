@@ -485,16 +485,34 @@ fn getWindowSize(writer: std.fs.File.Writer, reader: std.fs.File.Reader, rows: *
 //-----------------------------------------------------------------------------
 // Syntax Highlighting
 //-----------------------------------------------------------------------------
+fn is_separator(c: u8) bool {
+    return std.ascii.isWhitespace(c) or c == '\x00' or std.mem.indexOf(u8,
+        ",.()+-/*=~%<>[];",
+        &[_]u8{c}) != null;
+}
+
 fn editorUpdateSyntax(row: *erow) !void {
     row.*.hl.clearAndFree();
 
+	var prev_sep: bool = true;
+
     var i: usize = 0;
     while (i < row.*.render.items.len) : (i += 1) {
-        if (std.ascii.isDigit(row.*.render.items[i])) {
+		const c = row.*.render.items[i];
+		const prev_hl = if (i > 0) row.*.hl.items[i - 1] else @intFromEnum(
+			editorHighlight.HL_NORMAL);
+
+        if ((std.ascii.isDigit(c)  and (prev_sep or prev_hl == @intFromEnum(editorHighlight.HL_NUMBER)))
+            or (c == '.' and prev_hl == @intFromEnum(editorHighlight.HL_NUMBER))) 
+		{
             try row.*.hl.append(@intFromEnum(editorHighlight.HL_NUMBER));
+			prev_sep = false;
+			continue;
         } else {
             try row.*.hl.append(@intFromEnum(editorHighlight.HL_NORMAL));
         }
+		
+		prev_sep = is_separator(c);
     }
 }
 
