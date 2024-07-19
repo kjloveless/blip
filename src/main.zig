@@ -640,6 +640,8 @@ fn editorInsertChar(c: u8) !void {
 fn editorInsertNewline() !void {
     if (E.cx == 0) {
         try editorInsertRow(E.cy, "");
+    } else if (E.cy >= E.row.items.len) {
+        try editorInsertRow(E.cy, "");
     } else {
         const row = &E.row.items[E.cy];
         try editorInsertRow(E.cy + 1, row.*.chars.items[E.cx..]);
