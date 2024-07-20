@@ -33,6 +33,8 @@ const editorKey = enum(u8) {
 const editorHighlight = enum(u8) {
     HL_NORMAL = 0,
     HL_COMMENT,
+    HL_KEYWORD1,
+    HL_KEYWORD2,
     HL_STRING,
     HL_NUMBER,
     HL_MATCH,
@@ -76,6 +78,7 @@ var E: editorConfig = undefined;
 const editorSyntax = struct {
     filetype: []const u8,
     filematch: []const []const u8,
+    keywords: []const ?[]const u8,
     singleline_comment_start: ?[]const u8,
     flags: u32,
 };
@@ -88,11 +91,19 @@ const C_HL_extensions = &[_][]const u8{
     ".h",
     ".cpp",
 };
+const C_HL_keywords = &[_]?[]const u8{
+    "switch", "if", "while", "for", "break", "continue", "return", "else",
+    "struct", "union", "typedef", "static", "enum", "class", "case",
+
+    "int|", "long|", "double|", "float|", "char|", "unsigned|", "signed|",
+    "void|", null
+};
 
 const HLDB = [_]editorSyntax{
     .{
         .filetype = "c",
         .filematch = C_HL_extensions,
+        .keywords = C_HL_keywords,
         .singleline_comment_start = "//",
         .flags = HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
     },
@@ -532,7 +543,13 @@ fn is_separator(c: u8) bool {
 fn editorUpdateSyntax(row: *erow) !void {
     row.*.hl.clearAndFree();
 
+    var r: usize = 0;
+    while (r < row.*.render.items.len) : (r += 1) {
+        try row.*.hl.append(@intFromEnum(editorHighlight.HL_NORMAL));
+    }
     if (E.syntax == null) return;
+
+    const keywords = E.syntax.?.keywords;
 
     const scs = E.syntax.?.singleline_comment_start;
 
@@ -547,20 +564,16 @@ fn editorUpdateSyntax(row: *erow) !void {
 
         if (scs != null and in_string == 0) {
             if (std.mem.startsWith(u8, row.*.render.items, scs.?)) {
-                var j: usize = 0;
-                while (j < row.*.render.items.len - i) : (j += 1) {
-                    try row.*.hl.append(@intFromEnum(
-                            editorHighlight.HL_COMMENT));
-                }
+                @memset(row.*.hl.items, @intFromEnum(editorHighlight.HL_COMMENT));
                 break;
             }
         }
 
         if (E.syntax.?.flags & HL_HIGHLIGHT_STRINGS != 0) {
             if (in_string > 0) {
-                try row.*.hl.append(@intFromEnum(editorHighlight.HL_STRING));
+                row.*.hl.items[i] = @intFromEnum(editorHighlight.HL_STRING);
                 if (c == '\\' and i + 1 < row.*.render.items.len) {
-                    try row.*.hl.append(@intFromEnum(editorHighlight.HL_STRING));
+                    row.*.hl.items[i + 1] = @intFromEnum(editorHighlight.HL_STRING);
                     i += 1;
                     continue;
                 }
@@ -570,24 +583,52 @@ fn editorUpdateSyntax(row: *erow) !void {
             } else {
                 if (c == '"' or c == '\'') {
                     in_string = c;
-                    try row.*.hl.append(@intFromEnum(editorHighlight.HL_STRING));
+                    row.*.hl.items[i] = @intFromEnum(editorHighlight.HL_STRING);
                     continue;
                 }
             }
         }
 
         if (E.syntax.?.flags & HL_HIGHLIGHT_NUMBERS != 0) {
-            if ((std.ascii.isDigit(c)  and (prev_sep or prev_hl == @intFromEnum(editorHighlight.HL_NUMBER)))
+            if ((std.ascii.isDigit(c) 
+                and (prev_sep or prev_hl == @intFromEnum(editorHighlight.HL_NUMBER)))
                 or (c == '.' and prev_hl == @intFromEnum(editorHighlight.HL_NUMBER))) 
 		    {
-                try row.*.hl.append(@intFromEnum(editorHighlight.HL_NUMBER));
+                row.*.hl.items[i] = @intFromEnum(editorHighlight.HL_NUMBER);
 			    prev_sep = false;
 			    continue;
-            } else {
-                try row.*.hl.append(@intFromEnum(editorHighlight.HL_NORMAL));
             }
         }
-		
+
+        if (prev_sep) {
+            var j: usize = 0;
+            while (j < keywords.len) : (j += 1) {
+                if (keywords[j] == null) break;
+                var klen = keywords[j].?.len;
+                const kw2 = keywords[j].?[klen - 1] == '|';
+                if (kw2) {
+                    klen -= 1;
+                }
+
+                if (i + klen <= row.*.render.items.len and std.mem.eql(
+                        u8, 
+                        row.*.render.items[i..i+klen],
+                        keywords[j].?[0..klen]) 
+                    and (i + klen == row.render.items.len or is_separator(row.*.render.items[i + klen]))) 
+                {
+                    const hlType = if (kw2) editorHighlight.HL_KEYWORD2 else editorHighlight.HL_KEYWORD1;
+                    @memset(row.*.hl.items[i..i + klen], @intFromEnum(hlType));
+                    i += klen;
+                    break;
+                }
+            }
+
+            if (keywords[j] != null) {
+                prev_sep = false;
+                continue;
+            }
+        }
+
 		prev_sep = is_separator(c);
     }
 }
@@ -595,6 +636,8 @@ fn editorUpdateSyntax(row: *erow) !void {
 fn editorSyntaxToColor(hl: u8) u8 {
     switch (hl) {
         @intFromEnum(editorHighlight.HL_COMMENT) => return 36,
+        @intFromEnum(editorHighlight.HL_KEYWORD1) => return 33,
+        @intFromEnum(editorHighlight.HL_KEYWORD2) => return 32,
         @intFromEnum(editorHighlight.HL_STRING) => return 35,
         @intFromEnum(editorHighlight.HL_NUMBER) => return 31,
         @intFromEnum(editorHighlight.HL_MATCH) => return 34,
