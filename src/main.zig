@@ -32,6 +32,7 @@ const editorKey = enum(u8) {
 
 const editorHighlight = enum(u8) {
     HL_NORMAL = 0,
+    HL_COMMENT,
     HL_STRING,
     HL_NUMBER,
     HL_MATCH,
@@ -75,6 +76,7 @@ var E: editorConfig = undefined;
 const editorSyntax = struct {
     filetype: []const u8,
     filematch: []const []const u8,
+    singleline_comment_start: ?[]const u8,
     flags: u32,
 };
 
@@ -91,6 +93,7 @@ const HLDB = [_]editorSyntax{
     .{
         .filetype = "c",
         .filematch = C_HL_extensions,
+        .singleline_comment_start = "//",
         .flags = HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
     },
 };
@@ -531,6 +534,8 @@ fn editorUpdateSyntax(row: *erow) !void {
 
     if (E.syntax == null) return;
 
+    const scs = E.syntax.?.singleline_comment_start;
+
 	var prev_sep: bool = true;
     var in_string: u8 = 0;
 
@@ -539,6 +544,17 @@ fn editorUpdateSyntax(row: *erow) !void {
 		const c = row.*.render.items[i];
 		const prev_hl = if (i > 0) row.*.hl.items[i - 1] else @intFromEnum(
 			editorHighlight.HL_NORMAL);
+
+        if (scs != null and in_string == 0) {
+            if (std.mem.startsWith(u8, row.*.render.items, scs.?)) {
+                var j: usize = 0;
+                while (j < row.*.render.items.len - i) : (j += 1) {
+                    try row.*.hl.append(@intFromEnum(
+                            editorHighlight.HL_COMMENT));
+                }
+                break;
+            }
+        }
 
         if (E.syntax.?.flags & HL_HIGHLIGHT_STRINGS != 0) {
             if (in_string > 0) {
@@ -578,6 +594,7 @@ fn editorUpdateSyntax(row: *erow) !void {
 
 fn editorSyntaxToColor(hl: u8) u8 {
     switch (hl) {
+        @intFromEnum(editorHighlight.HL_COMMENT) => return 36,
         @intFromEnum(editorHighlight.HL_STRING) => return 35,
         @intFromEnum(editorHighlight.HL_NUMBER) => return 31,
         @intFromEnum(editorHighlight.HL_MATCH) => return 34,
