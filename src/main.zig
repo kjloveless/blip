@@ -32,11 +32,13 @@ const editorKey = enum(u8) {
 
 const editorHighlight = enum(u8) {
     HL_NORMAL = 0,
+    HL_STRING,
     HL_NUMBER,
     HL_MATCH,
 };
 
 const HL_HIGHLIGHT_NUMBERS: u32 = 1;
+const HL_HIGHLIGHT_STRINGS: u32 = 1 << 1;
 
 //------------------------------------------------------------------------------
 // Data 
@@ -89,7 +91,7 @@ const HLDB = [_]editorSyntax{
     .{
         .filetype = "c",
         .filematch = C_HL_extensions,
-        .flags = HL_HIGHLIGHT_NUMBERS,
+        .flags = HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
     },
 };
 
@@ -530,6 +532,7 @@ fn editorUpdateSyntax(row: *erow) !void {
     if (E.syntax == null) return;
 
 	var prev_sep: bool = true;
+    var in_string: u8 = 0;
 
     var i: usize = 0;
     while (i < row.*.render.items.len) : (i += 1) {
@@ -537,7 +540,27 @@ fn editorUpdateSyntax(row: *erow) !void {
 		const prev_hl = if (i > 0) row.*.hl.items[i - 1] else @intFromEnum(
 			editorHighlight.HL_NORMAL);
 
-        if (E.syntax.?.flags & HL_HIGHLIGHT_NUMBERS == 1) {
+        if (E.syntax.?.flags & HL_HIGHLIGHT_STRINGS != 0) {
+            if (in_string > 0) {
+                try row.*.hl.append(@intFromEnum(editorHighlight.HL_STRING));
+                if (c == '\\' and i + 1 < row.*.render.items.len) {
+                    try row.*.hl.append(@intFromEnum(editorHighlight.HL_STRING));
+                    i += 1;
+                    continue;
+                }
+                if (c == in_string) in_string = 0;
+                prev_sep = true;
+                continue;
+            } else {
+                if (c == '"' or c == '\'') {
+                    in_string = c;
+                    try row.*.hl.append(@intFromEnum(editorHighlight.HL_STRING));
+                    continue;
+                }
+            }
+        }
+
+        if (E.syntax.?.flags & HL_HIGHLIGHT_NUMBERS != 0) {
             if ((std.ascii.isDigit(c)  and (prev_sep or prev_hl == @intFromEnum(editorHighlight.HL_NUMBER)))
                 or (c == '.' and prev_hl == @intFromEnum(editorHighlight.HL_NUMBER))) 
 		    {
@@ -555,6 +578,7 @@ fn editorUpdateSyntax(row: *erow) !void {
 
 fn editorSyntaxToColor(hl: u8) u8 {
     switch (hl) {
+        @intFromEnum(editorHighlight.HL_STRING) => return 35,
         @intFromEnum(editorHighlight.HL_NUMBER) => return 31,
         @intFromEnum(editorHighlight.HL_MATCH) => return 34,
         else => return 37,
