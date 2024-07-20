@@ -36,6 +36,8 @@ const editorHighlight = enum(u8) {
     HL_MATCH,
 };
 
+const HL_HIGHLIGHT_NUMBERS: u32 = 1;
+
 //------------------------------------------------------------------------------
 // Data 
 //------------------------------------------------------------------------------
@@ -59,6 +61,7 @@ const editorConfig = struct {
     filename: ?[]u8,
     statusmsg: std.ArrayList(u8),
     statusmsg_time: i64,
+    syntax: ?editorSyntax,
     original_termios: posix.termios,
     reader: std.fs.File.Reader,
     writer: std.fs.File.Writer,
@@ -66,6 +69,31 @@ const editorConfig = struct {
 };
 
 var E: editorConfig = undefined;
+
+const editorSyntax = struct {
+    filetype: []const u8,
+    filematch: []const []const u8,
+    flags: u32,
+};
+
+//-----------------------------------------------------------------------------
+// Filetypes
+//-----------------------------------------------------------------------------
+const C_HL_extensions = &[_][]const u8{
+    ".c",
+    ".h",
+    ".cpp",
+};
+
+const HLDB = [_]editorSyntax{
+    .{
+        .filetype = "c",
+        .filematch = C_HL_extensions,
+        .flags = HL_HIGHLIGHT_NUMBERS,
+    },
+};
+
+const HLDB_ENTRIES = HLDB.len;
 
 //-----------------------------------------------------------------------------
 // File I/O
@@ -87,6 +115,9 @@ fn editorOpen(filename: []u8) !void {
         .{ },
     );
     defer file.close();
+
+    try editorSelectSyntaxHighlight();
+
     var file_reader = std.io.bufferedReader(file.reader());
     var input_stream = file_reader.reader();
 
@@ -121,6 +152,7 @@ fn editorSave() !void {
             try editorSetStatusMessage("Save aborted", .{});
             return;
         }
+        try editorSelectSyntaxHighlight();
     }
 
     const updatedText = try editorRowsToString();
@@ -259,6 +291,7 @@ fn initEditor(
     E.statusmsg = std.ArrayList(u8).init(E.allocator);
     try E.statusmsg.append('\x00');
     E.statusmsg_time = 0;
+    E.syntax = null;
     E.reader = io.getStdIn().reader();
     E.writer = io.getStdOut().writer();
 
@@ -494,6 +527,8 @@ fn is_separator(c: u8) bool {
 fn editorUpdateSyntax(row: *erow) !void {
     row.*.hl.clearAndFree();
 
+    if (E.syntax == null) return;
+
 	var prev_sep: bool = true;
 
     var i: usize = 0;
@@ -502,14 +537,16 @@ fn editorUpdateSyntax(row: *erow) !void {
 		const prev_hl = if (i > 0) row.*.hl.items[i - 1] else @intFromEnum(
 			editorHighlight.HL_NORMAL);
 
-        if ((std.ascii.isDigit(c)  and (prev_sep or prev_hl == @intFromEnum(editorHighlight.HL_NUMBER)))
-            or (c == '.' and prev_hl == @intFromEnum(editorHighlight.HL_NUMBER))) 
-		{
-            try row.*.hl.append(@intFromEnum(editorHighlight.HL_NUMBER));
-			prev_sep = false;
-			continue;
-        } else {
-            try row.*.hl.append(@intFromEnum(editorHighlight.HL_NORMAL));
+        if (E.syntax.?.flags & HL_HIGHLIGHT_NUMBERS == 1) {
+            if ((std.ascii.isDigit(c)  and (prev_sep or prev_hl == @intFromEnum(editorHighlight.HL_NUMBER)))
+                or (c == '.' and prev_hl == @intFromEnum(editorHighlight.HL_NUMBER))) 
+		    {
+                try row.*.hl.append(@intFromEnum(editorHighlight.HL_NUMBER));
+			    prev_sep = false;
+			    continue;
+            } else {
+                try row.*.hl.append(@intFromEnum(editorHighlight.HL_NORMAL));
+            }
         }
 		
 		prev_sep = is_separator(c);
@@ -521,6 +558,33 @@ fn editorSyntaxToColor(hl: u8) u8 {
         @intFromEnum(editorHighlight.HL_NUMBER) => return 31,
         @intFromEnum(editorHighlight.HL_MATCH) => return 34,
         else => return 37,
+    }
+}
+
+fn editorSelectSyntaxHighlight() !void {
+    E.syntax = null;
+    if (E.filename == null) return;
+
+    const ext = std.fs.path.extension(E.filename.?);
+
+    var j: usize = 0;
+    while (j < HLDB_ENTRIES) : (j += 1) {
+        const s = HLDB[j];
+        var i: usize = 0;
+
+        while (i < s.filematch.len) : (i += 1) {
+            const is_ext = s.filematch[i][0] == '.';
+            if ((is_ext and std.mem.eql(u8, ext, s.filematch[i]))) {
+                E.syntax = s;
+
+                var filerow: usize = 0;
+                while (filerow < E.numrows) : (filerow += 1) {
+                    try editorUpdateSyntax(&E.row.items[filerow]);
+                }
+
+                return;
+            }
+        }
     }
 }
 
@@ -731,26 +795,31 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                 var current_color: isize = -1;
                 while (i < end) : (i += 1) {
                     const c = E.row.items[filerow].render.items[i];
-                    const hl = E.row.items[filerow].hl.items[i];
 
-                    if (hl == @intFromEnum(editorHighlight.HL_NORMAL)) {
-                        if (current_color != -1) {
-                            try abAppend(append_buffer, "\x1b[39m");
-                            current_color = -1;
-                        }
-                        try abAppend(append_buffer, &[_]u8{c});
-                    } else {
-                        const color = editorSyntaxToColor(hl);
-                        if (color != current_color) {
-                            current_color = color;
-                            var buffer = std.ArrayList(u8).init(E.allocator);
-                            try std.fmt.format(
-                                buffer.writer(), 
-                                "\x1b[{d}m",
-                                .{color});
+                    if (E.row.items[filerow].hl.items.len > 0) {
+                        const hl = E.row.items[filerow].hl.items[i];
+
+                        if (hl == @intFromEnum(editorHighlight.HL_NORMAL)) {
+                            if (current_color != -1) {
+                                try abAppend(append_buffer, "\x1b[39m");
+                                current_color = -1;
+                            }
+                            try abAppend(append_buffer, &[_]u8{c});
+                        } else {
+                            const color = editorSyntaxToColor(hl);
+                            if (color != current_color) {
+                                current_color = color;
+                                var buffer = std.ArrayList(u8).init(E.allocator);
+                                try std.fmt.format(
+                                    buffer.writer(), 
+                                    "\x1b[{d}m",
+                                    .{color});
                 
-                            try abAppend(append_buffer, buffer.items);
+                                try abAppend(append_buffer, buffer.items);
+                            }
+                            try abAppend(append_buffer, &[_]u8{c});
                         }
+                    } else {
                         try abAppend(append_buffer, &[_]u8{c});
                     }
                 }
@@ -769,6 +838,7 @@ fn editorDrawStatusBar(append_buffer: *abuf) !void {
     try abAppend(append_buffer, "\x1b[7m");
     var status = std.ArrayList(u8).init(E.allocator);
     var row_status = std.ArrayList(u8).init(E.allocator);
+    const filetype = if (E.syntax != null) E.syntax.?.filetype else "no ft";
 
     try std.fmt.format(
         status.writer(),
@@ -781,8 +851,8 @@ fn editorDrawStatusBar(append_buffer: *abuf) !void {
     );
     try std.fmt.format(
         row_status.writer(),
-        "{d}/{d}",
-        .{ E.cy + 1, E.numrows }
+        "{s} | {d}/{d}",
+        .{ filetype, E.cy + 1, E.numrows }
     );
 
     try abAppend(append_buffer, status.items);
