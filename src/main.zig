@@ -883,7 +883,20 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                     if (E.row.items[filerow].hl.items.len > 0) {
                         const hl = E.row.items[filerow].hl.items[i];
 
-                        if (hl == @intFromEnum(editorHighlight.HL_NORMAL)) {
+                        if (iscntrl(c)) {
+                            const sym = if (c <= 26) '@' + c else '?';
+                            try abAppend(append_buffer, "\x1b[7m");
+                            try abAppend(append_buffer, &[_]u8{sym});
+                            try abAppend(append_buffer, "\x1b[m");
+                            if (current_color != -1) {
+                                var buf = std.ArrayList(u8).init(E.allocator);
+                                try std.fmt.format(
+                                    buf.writer(), 
+                                    "\x1b[{d}m",
+                                    .{current_color});
+                                try abAppend(append_buffer, buf.items);
+                            }
+                        } else if (hl == @intFromEnum(editorHighlight.HL_NORMAL)) {
                             if (current_color != -1) {
                                 try abAppend(append_buffer, "\x1b[39m");
                                 current_color = -1;
