@@ -652,7 +652,7 @@ fn editorUpdateSyntax(row: *erow) !void {
                 {
                     const hlType = if (kw2) editorHighlight.HL_KEYWORD2 else editorHighlight.HL_KEYWORD1;
                     @memset(row.*.hl.items[i..i + klen], @intFromEnum(hlType));
-                    i += klen;
+                    i += klen - 1;
                     break;
                 }
             }
