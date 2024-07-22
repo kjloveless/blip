@@ -33,6 +33,7 @@ const editorKey = enum(u8) {
 const editorHighlight = enum(u8) {
     HL_NORMAL = 0,
     HL_COMMENT,
+    HL_MLCOMMENT,
     HL_KEYWORD1,
     HL_KEYWORD2,
     HL_STRING,
@@ -47,9 +48,11 @@ const HL_HIGHLIGHT_STRINGS: u32 = 1 << 1;
 // Data 
 //------------------------------------------------------------------------------
 const erow = struct {
+    idx: u16,
     chars: std.ArrayList(u8),
     render: std.ArrayList(u8),
     hl: std.ArrayList(u8),
+    hl_open_comment: bool,
 };
 
 const editorConfig = struct {
@@ -80,6 +83,8 @@ const editorSyntax = struct {
     filematch: []const []const u8,
     keywords: []const ?[]const u8,
     singleline_comment_start: ?[]const u8,
+    multiline_comment_start: ?[]const u8,
+    multiline_comment_end: ?[]const u8,
     flags: u32,
 };
 
@@ -105,6 +110,8 @@ const HLDB = [_]editorSyntax{
         .filematch = C_HL_extensions,
         .keywords = C_HL_keywords,
         .singleline_comment_start = "//",
+        .multiline_comment_start = "/*",
+        .multiline_comment_end = "*/",
         .flags = HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS,
     },
 };
@@ -552,9 +559,12 @@ fn editorUpdateSyntax(row: *erow) !void {
     const keywords = E.syntax.?.keywords;
 
     const scs = E.syntax.?.singleline_comment_start;
+    const mcs = E.syntax.?.multiline_comment_start;
+    const mce = E.syntax.?.multiline_comment_end;
 
 	var prev_sep: bool = true;
     var in_string: u8 = 0;
+    var in_comment: bool = (row.*.idx > 0 and E.row.items[row.*.idx - 1].hl_open_comment); 
 
     var i: usize = 0;
     while (i < row.*.render.items.len) : (i += 1) {
@@ -562,10 +572,34 @@ fn editorUpdateSyntax(row: *erow) !void {
 		const prev_hl = if (i > 0) row.*.hl.items[i - 1] else @intFromEnum(
 			editorHighlight.HL_NORMAL);
 
-        if (scs != null and in_string == 0) {
+        if (scs != null and in_string == 0 and !in_comment) {
             if (std.mem.startsWith(u8, row.*.render.items, scs.?)) {
                 @memset(row.*.hl.items, @intFromEnum(editorHighlight.HL_COMMENT));
                 break;
+            }
+        }
+
+        if (mcs != null and mce != null and in_string == 0) {
+            if (in_comment) {
+                row.*.hl.items[i] = @intFromEnum(editorHighlight.HL_MLCOMMENT);
+                if (i + mce.?.len <= row.*.render.items.len and 
+                    std.mem.eql(u8, row.*.render.items[i..i + mce.?.len], mce.?[0..mce.?.len])) 
+                {
+                    @memset(row.*.hl.items[i..i + mce.?.len], @intFromEnum(editorHighlight.HL_MLCOMMENT));
+                    i += mce.?.len - 1;
+                    in_comment = false;
+                    prev_sep = true;
+                    continue;
+                } else {
+                    continue;
+                }
+            } else if (i + mcs.?.len <= row.*.render.items.len and 
+                std.mem.eql(u8, row.*.render.items[i..i + mcs.?.len], mcs.?[0..mcs.?.len])) 
+            {
+                @memset(row.*.hl.items[i..i + mcs.?.len], @intFromEnum(editorHighlight.HL_MLCOMMENT));
+                i += mcs.?.len - 1;
+                in_comment = true;
+                continue;
             }
         }
 
@@ -631,11 +665,18 @@ fn editorUpdateSyntax(row: *erow) !void {
 
 		prev_sep = is_separator(c);
     }
+
+    const changed = (row.*.hl_open_comment != in_comment);
+    row.*.hl_open_comment = in_comment;
+    if (changed and row.*.idx + 1 < E.numrows) {
+        try editorUpdateSyntax(&E.row.items[row.*.idx + 1]);
+    }
 }
 
 fn editorSyntaxToColor(hl: u8) u8 {
     switch (hl) {
         @intFromEnum(editorHighlight.HL_COMMENT) => return 36,
+        @intFromEnum(editorHighlight.HL_MLCOMMENT) => return 36,
         @intFromEnum(editorHighlight.HL_KEYWORD1) => return 33,
         @intFromEnum(editorHighlight.HL_KEYWORD2) => return 32,
         @intFromEnum(editorHighlight.HL_STRING) => return 35,
@@ -723,11 +764,18 @@ fn editorInsertRow(at: u16, s: []u8) !void {
     if (at < 0 or at > E.numrows) return;
 
     try E.row.insert(at, erow{
+        .idx = at,
         .chars = std.ArrayList(u8).init(E.allocator),
         .render = std.ArrayList(u8).init(E.allocator),
         .hl = std.ArrayList(u8).init(E.allocator),
+        .hl_open_comment = false,
     });
     const item = &E.row.items[at];
+
+    var j: usize = at + 1;
+    while (j <= E.numrows) : (j += 1) {
+        E.row.items[j].idx += 1;
+    }
 
     try item.*.chars.appendSlice(s);
     try editorUpdateRow(item);
@@ -747,6 +795,10 @@ fn editorDelRow(at: u16) !void {
 
     editorFreeRow(&E.row.items[at]);
     _ = E.row.orderedRemove(at);
+    var j: usize = at;
+    while (j < E.numrows - 1) : (j += 1) {
+        E.row.items[j].idx -= 1;
+    }
     E.numrows -= 1;
     E.dirty = true;
 }
