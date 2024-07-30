@@ -6,9 +6,8 @@ const io = std.io;
 const mem = std.mem;
 const posix = std.posix;
 const terminal = @import("posix/terminal.zig");
-const editor = @import("editor.zig");
 
-const editorKey = editor.editorKey;
+const k = @import("input.zig").inputKey;
 
 //------------------------------------------------------------------------------
 // Defines
@@ -205,11 +204,11 @@ fn editorFindCallback(query: *[] u8, key: u16) error{OutOfMemory}!void {
         static.last_match = -1;
         static.direction = 1;
         return;
-    } else if (key == @intFromEnum(editorKey.ARROW_RIGHT) 
-        or key == @intFromEnum(editorKey.ARROW_DOWN)) {
+    } else if (key == @intFromEnum(k.ARROW_RIGHT) 
+        or key == @intFromEnum(k.ARROW_DOWN)) {
         static.direction = 1;
-    } else if (key == @intFromEnum(editorKey.ARROW_LEFT)
-        or key == @intFromEnum(editorKey.ARROW_UP)) {
+    } else if (key == @intFromEnum(k.ARROW_LEFT)
+        or key == @intFromEnum(k.ARROW_UP)) {
         static.direction = -1;
     } else {
         static.last_match = -1;
@@ -879,8 +878,8 @@ fn editorPrompt(
         try editorRefreshScreen(writer);
         
         const c = try terminal.editorReadKey(reader);
-        if (c == @intFromEnum(editorKey.DEL_KEY) or c == CTRL_KEY('h') or c ==
-            @intFromEnum(editorKey.BACKSPACE)) {
+        if (c == @intFromEnum(k.DEL_KEY) or c == CTRL_KEY('h') or c ==
+            @intFromEnum(k.BACKSPACE)) {
             if (buffer.items.len != 0) {
                 _ = buffer.pop();
             }
@@ -913,7 +912,7 @@ fn editorPrompt(
 fn editorMoveCursor(key: u8) void {
     var row: ?*erow = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
     switch (key) {
-        @intFromEnum(editorKey.ARROW_LEFT) => {
+        @intFromEnum(k.ARROW_LEFT) => {
             if (E.cx != 0) {
                 E.cx -= 1;
             } else if (E.cy > 0) {
@@ -921,7 +920,7 @@ fn editorMoveCursor(key: u8) void {
                 E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
         },
-        @intFromEnum(editorKey.ARROW_RIGHT) => {
+        @intFromEnum(k.ARROW_RIGHT) => {
             if (row != null and E.cx < row.?.chars.items.len) {
                 E.cx += 1;
             } else if (row != null and E.cx == row.?.chars.items.len) {
@@ -930,12 +929,12 @@ fn editorMoveCursor(key: u8) void {
             }
 
         },
-        @intFromEnum(editorKey.ARROW_UP) => {
+        @intFromEnum(k.ARROW_UP) => {
             if (E.cy != 0) {
                 E.cy -= 1;
             } 
         },
-        @intFromEnum(editorKey.ARROW_DOWN) => {
+        @intFromEnum(k.ARROW_DOWN) => {
             if (E.cy < E.numrows) {
                 E.cy += 1;
             }
@@ -975,9 +974,9 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             try editorSave();
         },
 
-        @intFromEnum(editorKey.HOME_KEY) => E.cx = 0,
+        @intFromEnum(k.HOME_KEY) => E.cx = 0,
 
-        @intFromEnum(editorKey.END_KEY) => {
+        @intFromEnum(k.END_KEY) => {
             if (E.cy < E.numrows) {
                 E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
@@ -987,18 +986,18 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             try editorFind();
         },
 
-        @intFromEnum(editorKey.BACKSPACE), @intFromEnum(editorKey.DEL_KEY),
+        @intFromEnum(k.BACKSPACE), @intFromEnum(k.DEL_KEY),
         CTRL_KEY('h') => {
-            if (char == @intFromEnum(editorKey.DEL_KEY)) {
-                editorMoveCursor(@intFromEnum(editorKey.ARROW_RIGHT));
+            if (char == @intFromEnum(k.DEL_KEY)) {
+                editorMoveCursor(@intFromEnum(k.ARROW_RIGHT));
             }
             try editorDelChar();
         },
 
-        @intFromEnum(editorKey.PAGE_UP), @intFromEnum(editorKey.PAGE_DOWN) => {
-            if (char == @intFromEnum(editorKey.PAGE_UP)) {
+        @intFromEnum(k.PAGE_UP), @intFromEnum(k.PAGE_DOWN) => {
+            if (char == @intFromEnum(k.PAGE_UP)) {
                 E.cy = E.rowoff;
-            } else if (char == @intFromEnum(editorKey.PAGE_DOWN)) {
+            } else if (char == @intFromEnum(k.PAGE_DOWN)) {
                 E.cy = E.rowoff + E.screenrows - 1;
                 if (E.cy > E.numrows) {
                     E.cy = E.numrows;
@@ -1006,18 +1005,18 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
             }
             var times: u16 = E.screenrows;
             while (times > 0) : (times -= 1) {
-                if (char == @intFromEnum(editorKey.PAGE_UP)) {
-                    editorMoveCursor(@intFromEnum(editorKey.ARROW_UP));
+                if (char == @intFromEnum(k.PAGE_UP)) {
+                    editorMoveCursor(@intFromEnum(k.ARROW_UP));
                 } else {
-                    editorMoveCursor(@intFromEnum(editorKey.ARROW_DOWN));
+                    editorMoveCursor(@intFromEnum(k.ARROW_DOWN));
                 }
             }
         },
 
-        @intFromEnum(editorKey.ARROW_UP) => editorMoveCursor(char),
-        @intFromEnum(editorKey.ARROW_DOWN) => editorMoveCursor(char),
-        @intFromEnum(editorKey.ARROW_LEFT) => editorMoveCursor(char),
-        @intFromEnum(editorKey.ARROW_RIGHT) => editorMoveCursor(char),
+        @intFromEnum(k.ARROW_UP) => editorMoveCursor(char),
+        @intFromEnum(k.ARROW_DOWN) => editorMoveCursor(char),
+        @intFromEnum(k.ARROW_LEFT) => editorMoveCursor(char),
+        @intFromEnum(k.ARROW_RIGHT) => editorMoveCursor(char),
 
         CTRL_KEY('l'), '\x1b' => {},
 

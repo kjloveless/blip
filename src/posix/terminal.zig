@@ -1,7 +1,7 @@
 const std = @import("std");
 const posix = std.posix;
 
-const editorKey = @import("../editor.zig").editorKey;
+const k = @import("../input.zig").inputKey;
 
 var original_termios: posix.termios = undefined;
 
@@ -94,30 +94,30 @@ pub fn editorReadKey(reader: std.fs.File.Reader) !u8 {
                 if (try reader.read(seq[2..3]) != 1) return '\x1b';
                 if (seq[2] == '~') {
                     switch (seq[1]) {
-                        '1' => return @intFromEnum(editorKey.HOME_KEY),
-                        '3' => return @intFromEnum(editorKey.DEL_KEY),
-                        '4' => return @intFromEnum(editorKey.END_KEY),
-                        '5' => return @intFromEnum(editorKey.PAGE_UP),
-                        '6' => return @intFromEnum(editorKey.PAGE_DOWN),
-                        '7' => return @intFromEnum(editorKey.HOME_KEY),
-                        '8' => return @intFromEnum(editorKey.END_KEY),
+                        '1' => return @intFromEnum(k.HOME_KEY),
+                        '3' => return @intFromEnum(k.DEL_KEY),
+                        '4' => return @intFromEnum(k.END_KEY),
+                        '5' => return @intFromEnum(k.PAGE_UP),
+                        '6' => return @intFromEnum(k.PAGE_DOWN),
+                        '7' => return @intFromEnum(k.HOME_KEY),
+                        '8' => return @intFromEnum(k.END_KEY),
                         else => {},
                     }
                 }
             } else if (seq[0] == 'O') {
                 switch (seq[1]) {
-                    'H' => return @intFromEnum(editorKey.HOME_KEY),
-                    'F' => return @intFromEnum(editorKey.END_KEY),
+                    'H' => return @intFromEnum(k.HOME_KEY),
+                    'F' => return @intFromEnum(k.END_KEY),
                     else => {},
                 }
             } else {
                 switch (seq[1]) {
-                    'A' => return @intFromEnum(editorKey.ARROW_UP),
-                    'B' => return @intFromEnum(editorKey.ARROW_DOWN),
-                    'C' => return @intFromEnum(editorKey.ARROW_RIGHT),
-                    'D' => return @intFromEnum(editorKey.ARROW_LEFT),
-                    'H' => return @intFromEnum(editorKey.HOME_KEY),
-                    'F' => return @intFromEnum(editorKey.END_KEY),
+                    'A' => return @intFromEnum(k.ARROW_UP),
+                    'B' => return @intFromEnum(k.ARROW_DOWN),
+                    'C' => return @intFromEnum(k.ARROW_RIGHT),
+                    'D' => return @intFromEnum(k.ARROW_LEFT),
+                    'H' => return @intFromEnum(k.HOME_KEY),
+                    'F' => return @intFromEnum(k.END_KEY),
                     else => {},
                 }
             }
