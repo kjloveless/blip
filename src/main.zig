@@ -5,9 +5,11 @@ const std = @import("std");
 const io = std.io;
 const mem = std.mem;
 const posix = std.posix;
-const terminal = @import("posix/terminal.zig");
+const Terminal = @import("posix/terminal.zig").Terminal;
 
 const k = @import("input.zig").inputKey;
+
+var terminal: Terminal = undefined;
 
 //------------------------------------------------------------------------------
 // Defines
@@ -155,8 +157,6 @@ fn editorOpen(filename: []u8) !void {
 fn editorSave() !void {
     if (E.filename == null) {
         E.filename = try editorPrompt(
-            E.writer, 
-            E.reader, 
             "Save as: {s} (ESC to cancel)",
             null);
 
@@ -254,8 +254,6 @@ fn editorFind() !void {
     const saved_rowoff = E.rowoff;
 
     const query = try editorPrompt(
-        E.writer, 
-        E.reader, 
         "Search: {s} (Use ESC/Arrows/Enter)",
         &editorFindCallback);
 
@@ -307,16 +305,18 @@ fn initEditor(
     E.reader = io.getStdIn().reader();
     E.writer = io.getStdOut().writer();
 
-    if (try terminal.getWindowSize(E.writer, E.reader, &E.screenrows, &E.screencols) == -1) {
-        terminal.die("getWindowSize", error.WriteError); //pass correct error
+    terminal = Terminal.init(E.reader, E.writer);
+
+    if (try terminal.getWindowSize(&E.screenrows, &E.screencols) == -1) {
+        Terminal.die("getWindowSize", error.WriteError); //pass correct error
     }
     E.screenrows -= 2;
 }
 
 pub fn main() !void {
-    terminal.enableRawMode();
-    defer(terminal.disableRawMode());
-    errdefer(terminal.disableRawMode());
+    Terminal.enableRawMode();
+    defer(Terminal.disableRawMode());
+    errdefer(Terminal.disableRawMode());
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     defer {
@@ -335,8 +335,8 @@ pub fn main() !void {
         .{});
 
     while (true) {
-        try editorRefreshScreen(E.writer);
-        try editorProcessKeypress(E.reader);
+        try editorRefreshScreen();
+        try editorProcessKeypress();
     }
 }
 
@@ -737,7 +737,7 @@ fn editorDrawRows(append_buffer: *abuf) !void {
                     if (E.row.items[filerow].hl.items.len > 0) {
                         const hl = E.row.items[filerow].hl.items[i];
 
-                        if (terminal.iscntrl(c)) {
+                        if (Terminal.iscntrl(c)) {
                             const sym = if (c <= 26) '@' + c else '?';
                             try abAppend(append_buffer, "\x1b[7m");
                             try abAppend(append_buffer, &[_]u8{sym});
@@ -828,7 +828,7 @@ fn editorDrawMessageBar(append_buffer: *abuf) !void {
     }
 }
 
-fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
+fn editorRefreshScreen() !void {
     editorScroll();
     var append_buffer: abuf = ABUF_INIT;
 
@@ -849,7 +849,7 @@ fn editorRefreshScreen(writer: std.fs.File.Writer) !void {
 
     try abAppend(&append_buffer, "\x1b[?25h");
 
-    _ = try writer.write(append_buffer.b.items);
+    _ = try E.writer.write(append_buffer.b.items);
     abFree(&append_buffer);
 }
 
@@ -865,8 +865,6 @@ fn editorSetStatusMessage(comptime msg: []const u8, args: anytype) !void {
 // Input
 //-----------------------------------------------------------------------------
 fn editorPrompt(
-    writer: std.fs.File.Writer, 
-    reader: std.fs.File.Reader, 
     comptime prompt: []const u8,
     callback: ?*const fn (*[] u8, u16) error{OutOfMemory}!void
 ) !?[]u8 {
@@ -875,9 +873,9 @@ fn editorPrompt(
     
     while (true) {
         try editorSetStatusMessage(prompt, .{ buffer.items });
-        try editorRefreshScreen(writer);
+        try editorRefreshScreen();
         
-        const c = try terminal.editorReadKey(reader);
+        const c = try terminal.editorReadKey();
         if (c == @intFromEnum(k.DEL_KEY) or c == CTRL_KEY('h') or c ==
             @intFromEnum(k.BACKSPACE)) {
             if (buffer.items.len != 0) {
@@ -899,7 +897,7 @@ fn editorPrompt(
                 }
                 return buffer.items;
             }
-        } else if (!terminal.iscntrl(c) and c < 128) {
+        } else if (!Terminal.iscntrl(c) and c < 128) {
             try buffer.append(c);
         }
 
@@ -948,8 +946,8 @@ fn editorMoveCursor(key: u8) void {
     }
 }
 
-fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
-    const char = try terminal.editorReadKey(reader);
+fn editorProcessKeypress() !void {
+    const char = try terminal.editorReadKey();
     const Q = struct {
         var quit_times: u2 = BLIP_QUIT_TIMES;
     };
@@ -964,7 +962,7 @@ fn editorProcessKeypress(reader: std.fs.File.Reader) !void {
                 Q.quit_times -= 1;
                 return;
             }
-            terminal.disableRawMode();
+            Terminal.disableRawMode();
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[2J");
             _ = try posix.write(posix.STDOUT_FILENO, "\x1b[H");
             posix.exit(0);
