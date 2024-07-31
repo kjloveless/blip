@@ -7,7 +7,7 @@ const mem = std.mem;
 const posix = std.posix;
 const Terminal = @import("posix/terminal.zig").Terminal;
 
-const k = @import("input.zig").inputKey;
+const in = @import("input.zig").inputKey;
 
 var terminal: Terminal = undefined;
 
@@ -204,11 +204,11 @@ fn editorFindCallback(query: *[] u8, key: u16) error{OutOfMemory}!void {
         static.last_match = -1;
         static.direction = 1;
         return;
-    } else if (key == @intFromEnum(k.ARROW_RIGHT) 
-        or key == @intFromEnum(k.ARROW_DOWN)) {
+    } else if (key == @intFromEnum(in.ARROW_RIGHT) 
+        or key == @intFromEnum(in.ARROW_DOWN)) {
         static.direction = 1;
-    } else if (key == @intFromEnum(k.ARROW_LEFT)
-        or key == @intFromEnum(k.ARROW_UP)) {
+    } else if (key == @intFromEnum(in.ARROW_LEFT)
+        or key == @intFromEnum(in.ARROW_UP)) {
         static.direction = -1;
     } else {
         static.last_match = -1;
@@ -876,8 +876,8 @@ fn editorPrompt(
         try editorRefreshScreen();
         
         const c = try terminal.editorReadKey();
-        if (c == @intFromEnum(k.DEL_KEY) or c == CTRL_KEY('h') or c ==
-            @intFromEnum(k.BACKSPACE)) {
+        if (c == @intFromEnum(in.DEL_KEY) or c == CTRL_KEY('h') or c ==
+            @intFromEnum(in.BACKSPACE)) {
             if (buffer.items.len != 0) {
                 _ = buffer.pop();
             }
@@ -910,7 +910,7 @@ fn editorPrompt(
 fn editorMoveCursor(key: u8) void {
     var row: ?*erow = if (E.cy >= E.numrows) null else &E.row.items[E.cy];
     switch (key) {
-        @intFromEnum(k.ARROW_LEFT) => {
+        @intFromEnum(in.ARROW_LEFT) => {
             if (E.cx != 0) {
                 E.cx -= 1;
             } else if (E.cy > 0) {
@@ -918,7 +918,7 @@ fn editorMoveCursor(key: u8) void {
                 E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
         },
-        @intFromEnum(k.ARROW_RIGHT) => {
+        @intFromEnum(in.ARROW_RIGHT) => {
             if (row != null and E.cx < row.?.chars.items.len) {
                 E.cx += 1;
             } else if (row != null and E.cx == row.?.chars.items.len) {
@@ -927,12 +927,12 @@ fn editorMoveCursor(key: u8) void {
             }
 
         },
-        @intFromEnum(k.ARROW_UP) => {
+        @intFromEnum(in.ARROW_UP) => {
             if (E.cy != 0) {
                 E.cy -= 1;
             } 
         },
-        @intFromEnum(k.ARROW_DOWN) => {
+        @intFromEnum(in.ARROW_DOWN) => {
             if (E.cy < E.numrows) {
                 E.cy += 1;
             }
@@ -972,9 +972,9 @@ fn editorProcessKeypress() !void {
             try editorSave();
         },
 
-        @intFromEnum(k.HOME_KEY) => E.cx = 0,
+        @intFromEnum(in.HOME_KEY) => E.cx = 0,
 
-        @intFromEnum(k.END_KEY) => {
+        @intFromEnum(in.END_KEY) => {
             if (E.cy < E.numrows) {
                 E.cx = @intCast(E.row.items[E.cy].chars.items.len);
             }
@@ -984,18 +984,18 @@ fn editorProcessKeypress() !void {
             try editorFind();
         },
 
-        @intFromEnum(k.BACKSPACE), @intFromEnum(k.DEL_KEY),
+        @intFromEnum(in.BACKSPACE), @intFromEnum(in.DEL_KEY),
         CTRL_KEY('h') => {
-            if (char == @intFromEnum(k.DEL_KEY)) {
-                editorMoveCursor(@intFromEnum(k.ARROW_RIGHT));
+            if (char == @intFromEnum(in.DEL_KEY)) {
+                editorMoveCursor(@intFromEnum(in.ARROW_RIGHT));
             }
             try editorDelChar();
         },
 
-        @intFromEnum(k.PAGE_UP), @intFromEnum(k.PAGE_DOWN) => {
-            if (char == @intFromEnum(k.PAGE_UP)) {
+        @intFromEnum(in.PAGE_UP), @intFromEnum(in.PAGE_DOWN) => {
+            if (char == @intFromEnum(in.PAGE_UP)) {
                 E.cy = E.rowoff;
-            } else if (char == @intFromEnum(k.PAGE_DOWN)) {
+            } else if (char == @intFromEnum(in.PAGE_DOWN)) {
                 E.cy = E.rowoff + E.screenrows - 1;
                 if (E.cy > E.numrows) {
                     E.cy = E.numrows;
@@ -1003,18 +1003,18 @@ fn editorProcessKeypress() !void {
             }
             var times: u16 = E.screenrows;
             while (times > 0) : (times -= 1) {
-                if (char == @intFromEnum(k.PAGE_UP)) {
-                    editorMoveCursor(@intFromEnum(k.ARROW_UP));
+                if (char == @intFromEnum(in.PAGE_UP)) {
+                    editorMoveCursor(@intFromEnum(in.ARROW_UP));
                 } else {
-                    editorMoveCursor(@intFromEnum(k.ARROW_DOWN));
+                    editorMoveCursor(@intFromEnum(in.ARROW_DOWN));
                 }
             }
         },
 
-        @intFromEnum(k.ARROW_UP) => editorMoveCursor(char),
-        @intFromEnum(k.ARROW_DOWN) => editorMoveCursor(char),
-        @intFromEnum(k.ARROW_LEFT) => editorMoveCursor(char),
-        @intFromEnum(k.ARROW_RIGHT) => editorMoveCursor(char),
+        @intFromEnum(in.ARROW_UP) => editorMoveCursor(char),
+        @intFromEnum(in.ARROW_DOWN) => editorMoveCursor(char),
+        @intFromEnum(in.ARROW_LEFT) => editorMoveCursor(char),
+        @intFromEnum(in.ARROW_RIGHT) => editorMoveCursor(char),
 
         CTRL_KEY('l'), '\x1b' => {},
 
